@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DisplayLight.App/DisplayLight.App.csproj" />
+    <Project Path="src/DisplayLight.Core/DisplayLight.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DisplayLight.App.Tests/DisplayLight.App.Tests.csproj" />
+    <Project Path="tests/DisplayLight.Core.Tests/DisplayLight.Core.Tests.csproj" />
+  </Folder>
+</Solution>

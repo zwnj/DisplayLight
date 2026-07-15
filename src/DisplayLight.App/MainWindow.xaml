@@ -1,0 +1,226 @@
+<Window x:Class="DisplayLight.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="DisplayLight"
+        Width="620"
+        Height="700"
+        MinWidth="560"
+        MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="#F4F6FA">
+    <Window.Resources>
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="16,9" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="#E8EDF5" />
+            <Setter Property="Foreground" Value="#172033" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#315EFB" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#172033" />
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Margin" Value="0,12,0,4" />
+            <Setter Property="IsSnapToTickEnabled" Value="True" />
+            <Setter Property="TickFrequency" Value="1" />
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="5" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#172033" Padding="28,24">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="DisplayLight" FontSize="28" FontWeight="SemiBold" Foreground="White" />
+                    <TextBlock Text="ディスプレイとスリープを、必要なときだけ制御します。"
+                               Margin="0,6,0,0"
+                               Foreground="#B8C3D9" />
+                </StackPanel>
+                <Border Grid.Column="1"
+                        Padding="12,7"
+                        CornerRadius="16"
+                        Background="#26344F"
+                        VerticalAlignment="Center">
+                    <TextBlock Text="{Binding PowerSourceText}" Foreground="#E8EDF8" FontWeight="SemiBold" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,22,24,10">
+                <TextBlock Text="ディスプレイ消灯" FontSize="20" FontWeight="SemiBold" />
+                <TextBlock Text="現在のWindows電源プランを直接変更します。変更値はアプリ終了後も残ります。"
+                           Margin="0,5,0,16"
+                           Foreground="#596579"
+                           TextWrapping="Wrap" />
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="AC電源時" FontSize="17" FontWeight="SemiBold" />
+                                <TextBlock Margin="0,3,0,0" Foreground="#657186">
+                                    <Run Text="現在: " />
+                                    <Run Text="{Binding CurrentAcText, Mode=OneWay}" FontWeight="SemiBold" />
+                                </TextBlock>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SelectedAcText}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#315EFB"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <Slider Value="{Binding SelectedAcSliderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <UniformGrid Columns="6" Margin="0,0,0,12">
+                            <TextBlock Text="1分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="5分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="10分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="30分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="60分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="無期限" FontSize="11" TextAlignment="Center" />
+                        </UniformGrid>
+                        <Button Content="AC電源時に適用"
+                                Command="{Binding ApplyAcCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="バッテリー時" FontSize="17" FontWeight="SemiBold" />
+                                <TextBlock Margin="0,3,0,0" Foreground="#657186">
+                                    <Run Text="現在: " />
+                                    <Run Text="{Binding CurrentBatteryText, Mode=OneWay}" FontWeight="SemiBold" />
+                                </TextBlock>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SelectedBatteryText}"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#315EFB"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <Slider Value="{Binding SelectedBatterySliderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <UniformGrid Columns="6" Margin="0,0,0,12">
+                            <TextBlock Text="1分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="5分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="10分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="30分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="60分" FontSize="11" TextAlignment="Center" />
+                            <TextBlock Text="無期限" FontSize="11" TextAlignment="Center" />
+                        </UniformGrid>
+                        <Button Content="バッテリー時に適用"
+                                Command="{Binding ApplyBatteryCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="手動スリープ防止" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,12" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="システムスリープ" FontSize="17" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding SleepPreventionStatusText}"
+                                           Margin="0,4,0,0"
+                                           Foreground="#657186" />
+                            </StackPanel>
+                            <Ellipse Grid.Column="1"
+                                     Width="12"
+                                     Height="12"
+                                     Margin="12,0,0,0"
+                                     VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#94A3B8" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSleepPreventionActive}" Value="True">
+                                                <Setter Property="Fill" Value="#22A06B" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                        </Grid>
+                        <TextBlock Text="ディスプレイは設定時間どおり消灯できます。電源ボタンや蓋による明示的なスリープも妨げません。"
+                                   Margin="0,12,0,14"
+                                   Foreground="#596579"
+                                   TextWrapping="Wrap" />
+                        <CheckBox Content="AC電源接続時のみ有効"
+                                  IsChecked="{Binding IsAcPowerOnly, Mode=TwoWay}"
+                                  Command="{Binding UpdateAcPowerOnlyCommand}"
+                                  Margin="0,0,0,14" />
+                        <Button Content="{Binding SleepToggleButtonText}"
+                                Command="{Binding ToggleSleepPreventionCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="18,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="#596579"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="再読み込み" Command="{Binding RefreshCommand}" Margin="0,0,8,0" />
+                    <Button Content="隠す" Click="HideButton_Click" Margin="0,0,8,0" />
+                    <Button Content="終了" Click="ExitButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
