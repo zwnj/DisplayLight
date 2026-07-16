@@ -61,7 +61,7 @@ public partial class MainWindow : Window
                     placement.Edge,
                     FlyoutMotionCalculator.OpeningDistanceDips,
                     placement.DpiScale);
-            double startOpacity = wasVisible ? Opacity : 0;
+            double startOpacity = wasVisible ? Opacity : FlyoutMotionCalculator.OpeningStartOpacity;
 
             FlyoutPositioner.Move(this, placement, shouldAnimate ? start : placement.Location);
             currentWindowLocation = shouldAnimate ? start : placement.Location;
@@ -87,7 +87,7 @@ public partial class MainWindow : Window
                     placement.Location,
                     startOpacity,
                     1,
-                    TimeSpan.FromMilliseconds(160),
+                    TimeSpan.FromMilliseconds(FlyoutMotionCalculator.OpeningDurationMilliseconds),
                     cancellation.Token);
             }
 
@@ -208,7 +208,7 @@ public partial class MainWindow : Window
                     end,
                     Opacity,
                     0,
-                    TimeSpan.FromMilliseconds(100),
+                    TimeSpan.FromMilliseconds(FlyoutMotionCalculator.ClosingDurationMilliseconds),
                     cancellation.Token);
             }
 
@@ -271,7 +271,7 @@ public partial class MainWindow : Window
                 NativePoint location = FlyoutMotionCalculator.Interpolate(start, end, progress);
                 FlyoutPositioner.Move(this, placement, location);
                 currentWindowLocation = location;
-                Opacity = startOpacity + ((endOpacity - startOpacity) * progress);
+                Opacity = FlyoutMotionCalculator.InterpolateOpacity(startOpacity, endOpacity, progress);
             }
             catch (Exception exception) when (exception is Win32Exception)
             {
