@@ -39,8 +39,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool isDisposed;
     private int? currentAcPresetIndex;
     private int? currentBatteryPresetIndex;
-    private PowerSettingTarget expandedTarget = PowerSettingTarget.AcPower;
+    private PowerSettingTarget? expandedTarget = PowerSettingTarget.AcPower;
     private bool hasInitializedExpansion;
+    private bool isUpdatingSelection;
+    private bool hasAcSelectionChanged;
+    private bool hasBatterySelectionChanged;
     private string acErrorMessage = string.Empty;
     private string batteryErrorMessage = string.Empty;
     private string sleepErrorMessage = string.Empty;
@@ -93,9 +96,16 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             double normalized = NormalizeSliderValue(value);
             if (SetProperty(ref selectedAcSliderValue, normalized))
             {
+                if (!isUpdatingSelection)
+                {
+                    hasAcSelectionChanged = true;
+                }
+
                 SelectedAcText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedAcPresetIndex));
                 OnPropertyChanged(nameof(HasPendingAcChange));
+                OnPropertyChanged(nameof(HasAcSelectionSummary));
+                OnPropertyChanged(nameof(AcSelectionCaption));
             }
         }
     }
@@ -108,9 +118,16 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             double normalized = NormalizeSliderValue(value);
             if (SetProperty(ref selectedBatterySliderValue, normalized))
             {
+                if (!isUpdatingSelection)
+                {
+                    hasBatterySelectionChanged = true;
+                }
+
                 SelectedBatteryText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedBatteryPresetIndex));
                 OnPropertyChanged(nameof(HasPendingBatteryChange));
+                OnPropertyChanged(nameof(HasBatterySelectionSummary));
+                OnPropertyChanged(nameof(BatterySelectionCaption));
             }
         }
     }
@@ -127,9 +144,19 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         set => SelectedBatterySliderValue = value;
     }
 
-    public bool HasPendingAcChange => currentAcPresetIndex != SelectedAcPresetIndex;
+    public bool HasPendingAcChange =>
+        hasAcSelectionChanged && currentAcPresetIndex != SelectedAcPresetIndex;
 
-    public bool HasPendingBatteryChange => currentBatteryPresetIndex != SelectedBatteryPresetIndex;
+    public bool HasPendingBatteryChange =>
+        hasBatterySelectionChanged && currentBatteryPresetIndex != SelectedBatteryPresetIndex;
+
+    public bool HasAcSelectionSummary => HasPendingAcChange || currentAcPresetIndex is null;
+
+    public bool HasBatterySelectionSummary => HasPendingBatteryChange || currentBatteryPresetIndex is null;
+
+    public string AcSelectionCaption => HasPendingAcChange ? "変更後" : "前回選択";
+
+    public string BatterySelectionCaption => HasPendingBatteryChange ? "変更後" : "前回選択";
 
     public int? CurrentAcPresetIndex => currentAcPresetIndex;
 
@@ -139,13 +166,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsBatteryExpanded => expandedTarget == PowerSettingTarget.Battery;
 
-    public string AcExpansionAutomationName => IsAcExpanded
-        ? "AC電源時の消灯時間を折りたたむ"
-        : "AC電源時の消灯時間を展開";
+    public string AcExpansionAutomationName =>
+        $"AC電源時、現在{CurrentAcText}、{(IsAcExpanded ? "折りたたむ" : "展開")}";
 
-    public string BatteryExpansionAutomationName => IsBatteryExpanded
-        ? "バッテリー時の消灯時間を折りたたむ"
-        : "バッテリー時の消灯時間を展開";
+    public string BatteryExpansionAutomationName =>
+        $"バッテリー時、現在{CurrentBatteryText}、{(IsBatteryExpanded ? "折りたたむ" : "展開")}";
 
     public string AcChevronText => IsAcExpanded ? "⌃" : "⌄";
 
@@ -198,14 +223,38 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string CurrentAcText
     {
         get => currentAcText;
-        private set => SetProperty(ref currentAcText, value);
+        private set
+        {
+            if (SetProperty(ref currentAcText, value))
+            {
+                OnPropertyChanged(nameof(AcExpansionAutomationName));
+                OnPropertyChanged(nameof(CurrentAcDisplayText));
+                OnPropertyChanged(nameof(IsCurrentAcCustom));
+            }
+        }
     }
 
     public string CurrentBatteryText
     {
         get => currentBatteryText;
-        private set => SetProperty(ref currentBatteryText, value);
+        private set
+        {
+            if (SetProperty(ref currentBatteryText, value))
+            {
+                OnPropertyChanged(nameof(BatteryExpansionAutomationName));
+                OnPropertyChanged(nameof(CurrentBatteryDisplayText));
+                OnPropertyChanged(nameof(IsCurrentBatteryCustom));
+            }
+        }
     }
+
+    public string CurrentAcDisplayText => RemoveCustomPresetSuffix(CurrentAcText);
+
+    public string CurrentBatteryDisplayText => RemoveCustomPresetSuffix(CurrentBatteryText);
+
+    public bool IsCurrentAcCustom => CurrentAcText.Contains("（プリセット外）", StringComparison.Ordinal);
+
+    public bool IsCurrentBatteryCustom => CurrentBatteryText.Contains("（プリセット外）", StringComparison.Ordinal);
 
     public string SelectedAcText
     {
@@ -228,7 +277,13 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string SleepPreventionStatusText
     {
         get => sleepPreventionStatusText;
-        private set => SetProperty(ref sleepPreventionStatusText, value);
+        private set
+        {
+            if (SetProperty(ref sleepPreventionStatusText, value))
+            {
+                OnPropertyChanged(nameof(SleepPreventionAutomationName));
+            }
+        }
     }
 
     public string StatusMessage
@@ -270,9 +325,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     public string SleepToggleButtonText => IsSleepPreventionRequested ? "スリープ防止を解除" : "スリープ防止を開始";
 
-    public string SleepPreventionAutomationName => IsSleepPreventionRequested
-        ? "スリープ防止、オン。押すと解除します"
-        : "スリープ防止、オフ。押すと開始します";
+    public string SleepPreventionAutomationName =>
+        $"スリープ防止、{SleepPreventionStatusText}。押すと{(IsSleepPreventionRequested ? "解除" : "開始")}します";
 
     public bool IsBusy
     {
@@ -296,8 +350,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         settings = await settingsStore.LoadAsync();
         IsAcPowerOnly = settings.IsAcPowerOnly;
-        SelectedAcSliderValue = GetSliderIndex(settings.SelectedAcTimeout);
-        SelectedBatterySliderValue = GetSliderIndex(settings.SelectedBatteryTimeout);
+        UpdateSelectionWithoutMarkingPending(() =>
+        {
+            SelectedAcSliderValue = GetSliderIndex(settings.SelectedAcTimeout);
+            SelectedBatterySliderValue = GetSliderIndex(settings.SelectedBatteryTimeout);
+        });
 
         await RefreshAsync();
         powerSourceTimer.Start();
@@ -346,11 +403,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     internal void Expand(PowerSettingTarget target)
     {
-        if (expandedTarget == target)
-        {
-            return;
-        }
+        SetExpandedTarget(expandedTarget == target ? null : target);
+    }
 
+    private void SetExpandedTarget(PowerSettingTarget? target)
+    {
         expandedTarget = target;
         OnPropertyChanged(nameof(IsAcExpanded));
         OnPropertyChanged(nameof(IsBatteryExpanded));
@@ -375,6 +432,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 ? settings with { SelectedAcTimeout = preset }
                 : settings with { SelectedBatteryTimeout = preset };
             await settingsStore.SaveAsync(settings);
+            ClearSelectionChanged(target);
             SetTransientStatus($"{GetTargetLabel(target)}の消灯時間を{PresetPresentation.GetLabel(preset)}に変更しました。");
         }, exception => SetTargetError(target, exception));
     }
@@ -385,6 +443,9 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             DisplayTimeoutValues values = await displayTimeoutService.ReadAsync();
             ApplyCurrentValues(values, updateSlidersForExactValues: true);
+            hasAcSelectionChanged = false;
+            hasBatterySelectionChanged = false;
+            NotifySelectionStateChanged();
             RefreshPowerSource(updateStatusMessage: false);
             AcErrorMessage = string.Empty;
             BatteryErrorMessage = string.Empty;
@@ -445,18 +506,20 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CurrentAcPresetIndex));
         OnPropertyChanged(nameof(CurrentBatteryPresetIndex));
 
-        if (updateSlidersForExactValues && currentAcPresetIndex is int acIndex)
+        UpdateSelectionWithoutMarkingPending(() =>
         {
-            SelectedAcSliderValue = acIndex;
-        }
+            if (updateSlidersForExactValues && currentAcPresetIndex is int acIndex)
+            {
+                SelectedAcSliderValue = acIndex;
+            }
 
-        if (updateSlidersForExactValues && currentBatteryPresetIndex is int batteryIndex)
-        {
-            SelectedBatterySliderValue = batteryIndex;
-        }
+            if (updateSlidersForExactValues && currentBatteryPresetIndex is int batteryIndex)
+            {
+                SelectedBatterySliderValue = batteryIndex;
+            }
+        });
 
-        OnPropertyChanged(nameof(HasPendingAcChange));
-        OnPropertyChanged(nameof(HasPendingBatteryChange));
+        NotifySelectionStateChanged();
     }
 
     private void RefreshPowerSource(bool updateStatusMessage)
@@ -475,7 +538,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
             if (!hasInitializedExpansion && source is PowerSource.AcPower or PowerSource.Battery)
             {
-                Expand(source == PowerSource.Battery
+                SetExpandedTarget(source == PowerSource.Battery
                     ? PowerSettingTarget.Battery
                     : PowerSettingTarget.AcPower);
                 hasInitializedExpansion = true;
@@ -617,6 +680,46 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
         return 2;
     }
+
+    private void UpdateSelectionWithoutMarkingPending(Action update)
+    {
+        isUpdatingSelection = true;
+        try
+        {
+            update();
+        }
+        finally
+        {
+            isUpdatingSelection = false;
+        }
+    }
+
+    private void ClearSelectionChanged(PowerSettingTarget target)
+    {
+        if (target == PowerSettingTarget.AcPower)
+        {
+            hasAcSelectionChanged = false;
+        }
+        else
+        {
+            hasBatterySelectionChanged = false;
+        }
+
+        NotifySelectionStateChanged();
+    }
+
+    private void NotifySelectionStateChanged()
+    {
+        OnPropertyChanged(nameof(HasPendingAcChange));
+        OnPropertyChanged(nameof(HasPendingBatteryChange));
+        OnPropertyChanged(nameof(HasAcSelectionSummary));
+        OnPropertyChanged(nameof(HasBatterySelectionSummary));
+        OnPropertyChanged(nameof(AcSelectionCaption));
+        OnPropertyChanged(nameof(BatterySelectionCaption));
+    }
+
+    private static string RemoveCustomPresetSuffix(string value) =>
+        value.Replace("（プリセット外）", string.Empty, StringComparison.Ordinal);
 
     private static string GetTargetLabel(PowerSettingTarget target) => target switch
     {

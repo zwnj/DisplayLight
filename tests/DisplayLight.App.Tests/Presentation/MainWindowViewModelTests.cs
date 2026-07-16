@@ -27,7 +27,12 @@ public sealed class MainWindowViewModelTests
         await viewModel.InitializeAsync();
 
         Assert.Equal("15分（プリセット外）", viewModel.CurrentAcText);
+        Assert.Equal("15分", viewModel.CurrentAcDisplayText);
+        Assert.True(viewModel.IsCurrentAcCustom);
         Assert.Equal(3, viewModel.SelectedAcSliderValue);
+        Assert.False(viewModel.HasPendingAcChange);
+        Assert.True(viewModel.HasAcSelectionSummary);
+        Assert.Equal("前回選択", viewModel.AcSelectionCaption);
         Assert.Equal("5分", viewModel.CurrentBatteryText);
         Assert.Equal(1, viewModel.SelectedBatterySliderValue);
     }
@@ -50,6 +55,7 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsSleepPreventionRequested);
         Assert.False(viewModel.IsSleepPreventionActive);
         Assert.Equal("AC電源接続待ち", viewModel.SleepPreventionStatusText);
+        Assert.Equal("スリープ防止、AC電源接続待ち。押すと解除します", viewModel.SleepPreventionAutomationName);
         Assert.False(sleepService.IsActive);
     }
 
@@ -93,10 +99,32 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.IsAcExpanded);
         Assert.True(viewModel.IsBatteryExpanded);
         Assert.Equal("電源：バッテリー駆動", viewModel.PowerSourceText);
-        Assert.Equal("AC電源時の消灯時間を展開", viewModel.AcExpansionAutomationName);
-        Assert.Equal("バッテリー時の消灯時間を折りたたむ", viewModel.BatteryExpansionAutomationName);
+        Assert.Equal("AC電源時、現在10分、展開", viewModel.AcExpansionAutomationName);
+        Assert.Equal("バッテリー時、現在5分、折りたたむ", viewModel.BatteryExpansionAutomationName);
         Assert.Equal("⌄", viewModel.AcChevronText);
         Assert.Equal("⌃", viewModel.BatteryChevronText);
+    }
+
+    [Fact]
+    public async Task ExpandedSectionCanBeCollapsedAndReopened()
+    {
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeSleepPreventionService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+
+        viewModel.Expand(PowerSettingTarget.AcPower);
+
+        Assert.False(viewModel.IsAcExpanded);
+        Assert.False(viewModel.IsBatteryExpanded);
+        Assert.Equal("AC電源時、現在10分、展開", viewModel.AcExpansionAutomationName);
+
+        viewModel.Expand(PowerSettingTarget.Battery);
+
+        Assert.False(viewModel.IsAcExpanded);
+        Assert.True(viewModel.IsBatteryExpanded);
     }
 
     [Fact]
@@ -113,6 +141,7 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(2, viewModel.CurrentAcPresetIndex);
         viewModel.SelectedAcPresetIndex = 4;
         Assert.True(viewModel.HasPendingAcChange);
+        Assert.Equal("変更後", viewModel.AcSelectionCaption);
         viewModel.SelectedAcPresetIndex = 2;
         Assert.False(viewModel.HasPendingAcChange);
     }

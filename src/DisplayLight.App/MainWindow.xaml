@@ -357,13 +357,13 @@
                         </ToggleButton>
                         <StackPanel Visibility="{Binding IsAcExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="12,0,12,12">
-                            <Grid Visibility="{Binding HasPendingAcChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            <Grid Visibility="{Binding HasAcSelectionSummary, Converter={StaticResource BooleanToVisibilityConverter}}"
                                   Margin="4,0,4,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="変更後" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding AcSelectionCaption}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedAcText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
                             </Grid>
                             <controls:DiscretePresetListBox x:Name="AcPresetList"
@@ -415,13 +415,13 @@
                         </ToggleButton>
                         <StackPanel Visibility="{Binding IsBatteryExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="12,0,12,12">
-                            <Grid Visibility="{Binding HasPendingBatteryChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            <Grid Visibility="{Binding HasBatterySelectionSummary, Converter={StaticResource BooleanToVisibilityConverter}}"
                                   Margin="4,0,4,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="変更後" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding BatterySelectionCaption}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
                                 <TextBlock Grid.Column="1" Text="{Binding SelectedBatteryText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
                             </Grid>
                             <controls:DiscretePresetListBox x:Name="BatteryPresetList"
