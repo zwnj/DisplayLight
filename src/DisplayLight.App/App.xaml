@@ -4,6 +4,15 @@
              xmlns:local="clr-namespace:DisplayLight.App"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
-
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#EAF7F7FA" />
+        <SolidColorBrush x:Key="SurfaceElevatedBrush" Color="#CCFFFFFF" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1B1F" />
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#60606A" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#668A8F99" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#2563EB" />
+        <SolidColorBrush x:Key="AccentTextBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="HoverBrush" Color="#99FFFFFF" />
+        <SolidColorBrush x:Key="ErrorBrush" Color="#B42318" />
+        <SolidColorBrush x:Key="SuccessBrush" Color="#107C41" />
     </Application.Resources>
 </Application>

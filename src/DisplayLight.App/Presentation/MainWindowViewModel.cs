@@ -14,6 +14,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IPowerSourceProvider powerSourceProvider;
     private readonly IUserSettingsStore settingsStore;
     private readonly DispatcherTimer powerSourceTimer;
+    private readonly DispatcherTimer statusClearTimer;
     private readonly AsyncRelayCommand applyAcCommand;
     private readonly AsyncRelayCommand applyBatteryCommand;
     private readonly AsyncRelayCommand refreshCommand;
@@ -36,6 +37,13 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool isBusy = true;
     private bool hasError;
     private bool isDisposed;
+    private int? currentAcPresetIndex;
+    private int? currentBatteryPresetIndex;
+    private PowerSettingTarget expandedTarget = PowerSettingTarget.AcPower;
+    private bool hasInitializedExpansion;
+    private string acErrorMessage = string.Empty;
+    private string batteryErrorMessage = string.Empty;
+    private string sleepErrorMessage = string.Empty;
     private PowerSource currentPowerSource = PowerSource.Unknown;
 
     public MainWindowViewModel(
@@ -60,6 +68,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             Interval = TimeSpan.FromSeconds(5),
         };
         powerSourceTimer.Tick += HandlePowerSourceTimerTick;
+        statusClearTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(4),
+        };
+        statusClearTimer.Tick += HandleStatusClearTimerTick;
     }
 
     public ICommand ApplyAcCommand => applyAcCommand;
@@ -81,6 +94,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (SetProperty(ref selectedAcSliderValue, normalized))
             {
                 SelectedAcText = PresetPresentation.GetLabel(GetPreset(normalized));
+                OnPropertyChanged(nameof(SelectedAcPresetIndex));
+                OnPropertyChanged(nameof(HasPendingAcChange));
             }
         }
     }
@@ -94,9 +109,91 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (SetProperty(ref selectedBatterySliderValue, normalized))
             {
                 SelectedBatteryText = PresetPresentation.GetLabel(GetPreset(normalized));
+                OnPropertyChanged(nameof(SelectedBatteryPresetIndex));
+                OnPropertyChanged(nameof(HasPendingBatteryChange));
             }
         }
     }
+
+    public int SelectedAcPresetIndex
+    {
+        get => (int)SelectedAcSliderValue;
+        set => SelectedAcSliderValue = value;
+    }
+
+    public int SelectedBatteryPresetIndex
+    {
+        get => (int)SelectedBatterySliderValue;
+        set => SelectedBatterySliderValue = value;
+    }
+
+    public bool HasPendingAcChange => currentAcPresetIndex != SelectedAcPresetIndex;
+
+    public bool HasPendingBatteryChange => currentBatteryPresetIndex != SelectedBatteryPresetIndex;
+
+    public int? CurrentAcPresetIndex => currentAcPresetIndex;
+
+    public int? CurrentBatteryPresetIndex => currentBatteryPresetIndex;
+
+    public bool IsAcExpanded => expandedTarget == PowerSettingTarget.AcPower;
+
+    public bool IsBatteryExpanded => expandedTarget == PowerSettingTarget.Battery;
+
+    public string AcExpansionAutomationName => IsAcExpanded
+        ? "AC電源時の消灯時間を折りたたむ"
+        : "AC電源時の消灯時間を展開";
+
+    public string BatteryExpansionAutomationName => IsBatteryExpanded
+        ? "バッテリー時の消灯時間を折りたたむ"
+        : "バッテリー時の消灯時間を展開";
+
+    public string AcChevronText => IsAcExpanded ? "⌃" : "⌄";
+
+    public string BatteryChevronText => IsBatteryExpanded ? "⌃" : "⌄";
+
+    public string AcErrorMessage
+    {
+        get => acErrorMessage;
+        private set
+        {
+            if (SetProperty(ref acErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasAcError));
+            }
+        }
+    }
+
+    public string BatteryErrorMessage
+    {
+        get => batteryErrorMessage;
+        private set
+        {
+            if (SetProperty(ref batteryErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasBatteryError));
+            }
+        }
+    }
+
+    public string SleepErrorMessage
+    {
+        get => sleepErrorMessage;
+        private set
+        {
+            if (SetProperty(ref sleepErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasSleepError));
+            }
+        }
+    }
+
+    public bool HasAcError => !string.IsNullOrEmpty(AcErrorMessage);
+
+    public bool HasBatteryError => !string.IsNullOrEmpty(BatteryErrorMessage);
+
+    public bool HasSleepError => !string.IsNullOrEmpty(SleepErrorMessage);
+
+    public bool HasStatusMessage => !string.IsNullOrEmpty(StatusMessage);
 
     public string CurrentAcText
     {
@@ -137,7 +234,13 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string StatusMessage
     {
         get => statusMessage;
-        private set => SetProperty(ref statusMessage, value);
+        private set
+        {
+            if (SetProperty(ref statusMessage, value))
+            {
+                OnPropertyChanged(nameof(HasStatusMessage));
+            }
+        }
     }
 
     public bool IsAcPowerOnly
@@ -154,6 +257,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (SetProperty(ref isSleepPreventionRequested, value))
             {
                 OnPropertyChanged(nameof(SleepToggleButtonText));
+                OnPropertyChanged(nameof(SleepPreventionAutomationName));
             }
         }
     }
@@ -165,6 +269,10 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public string SleepToggleButtonText => IsSleepPreventionRequested ? "スリープ防止を解除" : "スリープ防止を開始";
+
+    public string SleepPreventionAutomationName => IsSleepPreventionRequested
+        ? "スリープ防止、オン。押すと解除します"
+        : "スリープ防止、オフ。押すと開始します";
 
     public bool IsBusy
     {
@@ -205,7 +313,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         try
         {
             sleepPreventionService.Renew();
-            StatusMessage = "スリープ復帰後に防止要求を更新しました。";
+            SetTransientStatus("スリープ復帰後に防止要求を更新しました。");
             HasError = false;
         }
         catch (Exception exception)
@@ -232,10 +340,29 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         isDisposed = true;
         powerSourceTimer.Stop();
         powerSourceTimer.Tick -= HandlePowerSourceTimerTick;
+        statusClearTimer.Stop();
+        statusClearTimer.Tick -= HandleStatusClearTimerTick;
+    }
+
+    internal void Expand(PowerSettingTarget target)
+    {
+        if (expandedTarget == target)
+        {
+            return;
+        }
+
+        expandedTarget = target;
+        OnPropertyChanged(nameof(IsAcExpanded));
+        OnPropertyChanged(nameof(IsBatteryExpanded));
+        OnPropertyChanged(nameof(AcExpansionAutomationName));
+        OnPropertyChanged(nameof(BatteryExpansionAutomationName));
+        OnPropertyChanged(nameof(AcChevronText));
+        OnPropertyChanged(nameof(BatteryChevronText));
     }
 
     private async Task ApplyTimeoutAsync(PowerSettingTarget target)
     {
+        ClearTargetError(target);
         await RunBusyOperationAsync(async () =>
         {
             DisplayTimeoutPreset preset = target == PowerSettingTarget.AcPower
@@ -248,8 +375,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 ? settings with { SelectedAcTimeout = preset }
                 : settings with { SelectedBatteryTimeout = preset };
             await settingsStore.SaveAsync(settings);
-            StatusMessage = $"{GetTargetLabel(target)}の消灯時間を{PresetPresentation.GetLabel(preset)}に変更しました。";
-        });
+            SetTransientStatus($"{GetTargetLabel(target)}の消灯時間を{PresetPresentation.GetLabel(preset)}に変更しました。");
+        }, exception => SetTargetError(target, exception));
     }
 
     private async Task RefreshAsync()
@@ -259,12 +386,15 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             DisplayTimeoutValues values = await displayTimeoutService.ReadAsync();
             ApplyCurrentValues(values, updateSlidersForExactValues: true);
             RefreshPowerSource(updateStatusMessage: false);
-            StatusMessage = "Windowsの現在の電源設定を読み込みました。";
+            AcErrorMessage = string.Empty;
+            BatteryErrorMessage = string.Empty;
+            SetTransientStatus("Windowsの現在の電源設定を読み込みました。");
         });
     }
 
     private Task ToggleSleepPreventionAsync()
     {
+        SleepErrorMessage = string.Empty;
         IsSleepPreventionRequested = !IsSleepPreventionRequested;
         ApplySleepPreventionDecision();
         return Task.CompletedTask;
@@ -277,10 +407,10 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             ApplySleepPreventionDecision();
             await settingsStore.SaveAsync(settings);
-        });
+        }, exception => SleepErrorMessage = FormatError(exception));
     }
 
-    private async Task RunBusyOperationAsync(Func<Task> operation)
+    private async Task RunBusyOperationAsync(Func<Task> operation, Action<Exception>? onError = null)
     {
         IsBusy = true;
         HasError = false;
@@ -292,6 +422,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             SetError(exception);
+            onError?.Invoke(exception);
         }
         finally
         {
@@ -304,15 +435,28 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         CurrentAcText = PresetPresentation.FormatCurrent(values.AcSeconds);
         CurrentBatteryText = PresetPresentation.FormatCurrent(values.BatterySeconds);
 
-        if (updateSlidersForExactValues && DisplayTimeoutCatalog.TryFromSeconds(values.AcSeconds, out DisplayTimeoutPreset acPreset))
+        currentAcPresetIndex = DisplayTimeoutCatalog.TryFromSeconds(values.AcSeconds, out DisplayTimeoutPreset acPreset)
+            ? GetSliderIndex(acPreset)
+            : null;
+        currentBatteryPresetIndex = DisplayTimeoutCatalog.TryFromSeconds(values.BatterySeconds, out DisplayTimeoutPreset batteryPreset)
+            ? GetSliderIndex(batteryPreset)
+            : null;
+
+        OnPropertyChanged(nameof(CurrentAcPresetIndex));
+        OnPropertyChanged(nameof(CurrentBatteryPresetIndex));
+
+        if (updateSlidersForExactValues && currentAcPresetIndex is int acIndex)
         {
-            SelectedAcSliderValue = GetSliderIndex(acPreset);
+            SelectedAcSliderValue = acIndex;
         }
 
-        if (updateSlidersForExactValues && DisplayTimeoutCatalog.TryFromSeconds(values.BatterySeconds, out DisplayTimeoutPreset batteryPreset))
+        if (updateSlidersForExactValues && currentBatteryPresetIndex is int batteryIndex)
         {
-            SelectedBatterySliderValue = GetSliderIndex(batteryPreset);
+            SelectedBatterySliderValue = batteryIndex;
         }
+
+        OnPropertyChanged(nameof(HasPendingAcChange));
+        OnPropertyChanged(nameof(HasPendingBatteryChange));
     }
 
     private void RefreshPowerSource(bool updateStatusMessage)
@@ -324,10 +468,18 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             currentPowerSource = source;
             PowerSourceText = source switch
             {
-                PowerSource.AcPower => "AC電源",
-                PowerSource.Battery => "バッテリー",
-                _ => "不明",
+                PowerSource.AcPower => "電源：AC接続",
+                PowerSource.Battery => "電源：バッテリー駆動",
+                _ => "電源：不明",
             };
+
+            if (!hasInitializedExpansion && source is PowerSource.AcPower or PowerSource.Battery)
+            {
+                Expand(source == PowerSource.Battery
+                    ? PowerSettingTarget.Battery
+                    : PowerSettingTarget.AcPower);
+                hasInitializedExpansion = true;
+            }
 
             if (changed || updateStatusMessage)
             {
@@ -337,7 +489,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             currentPowerSource = PowerSource.Unknown;
-            PowerSourceText = "取得失敗";
+            PowerSourceText = "電源：取得失敗";
             ApplySleepPreventionDecision();
             if (updateStatusMessage)
             {
@@ -359,19 +511,20 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             IsSleepPreventionActive = sleepPreventionService.IsActive;
             SleepPreventionStatusText = decision.Reason switch
             {
-                SleepPreventionReason.Active => "有効（ディスプレイ消灯は許可）",
+                SleepPreventionReason.Active => "オン",
                 SleepPreventionReason.WaitingForAcPower => "AC電源接続待ち",
                 SleepPreventionReason.PowerSourceUnavailable => "電源状態不明のため解除",
-                _ => "無効",
+                _ => "オフ",
             };
-            StatusMessage = decision.Reason switch
+            SetTransientStatus(decision.Reason switch
             {
                 SleepPreventionReason.Active => "システムスリープを防止しています。",
                 SleepPreventionReason.WaitingForAcPower => "バッテリー駆動へ切り替わったため、スリープ防止を解除しました。",
                 SleepPreventionReason.PowerSourceUnavailable => "電源状態を確認できないため、スリープ防止を解除しました。",
                 _ => "Windowsの通常の電源管理を使用しています。",
-            };
+            });
             HasError = false;
+            SleepErrorMessage = string.Empty;
         }
         catch (Exception exception)
         {
@@ -379,6 +532,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             IsSleepPreventionActive = false;
             SleepPreventionStatusText = "エラーのため解除";
             SetError(exception);
+            SleepErrorMessage = FormatError(exception);
         }
     }
 
@@ -388,10 +542,53 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private void SetError(Exception exception)
     {
         HasError = true;
-        StatusMessage = exception is Win32Exception win32Exception
-            ? $"{win32Exception.Message}（Windowsエラー {win32Exception.NativeErrorCode}）"
-            : exception.Message;
+        StatusMessage = FormatError(exception);
+        statusClearTimer.Stop();
     }
+
+    private void SetTransientStatus(string message)
+    {
+        StatusMessage = message;
+        statusClearTimer.Stop();
+        statusClearTimer.Start();
+    }
+
+    private void HandleStatusClearTimerTick(object? sender, EventArgs e)
+    {
+        statusClearTimer.Stop();
+        if (!HasError)
+        {
+            StatusMessage = string.Empty;
+        }
+    }
+
+    private void ClearTargetError(PowerSettingTarget target)
+    {
+        if (target == PowerSettingTarget.AcPower)
+        {
+            AcErrorMessage = string.Empty;
+        }
+        else
+        {
+            BatteryErrorMessage = string.Empty;
+        }
+    }
+
+    private void SetTargetError(PowerSettingTarget target, Exception exception)
+    {
+        if (target == PowerSettingTarget.AcPower)
+        {
+            AcErrorMessage = FormatError(exception);
+        }
+        else
+        {
+            BatteryErrorMessage = FormatError(exception);
+        }
+    }
+
+    private static string FormatError(Exception exception) => exception is Win32Exception win32Exception
+        ? $"{win32Exception.Message}（Windowsエラー {win32Exception.NativeErrorCode}）"
+        : exception.Message;
 
     private void NotifyCommandsChanged()
     {

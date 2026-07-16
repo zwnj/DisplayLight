@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using DisplayLight.App.Infrastructure.Flyout;
 
 namespace DisplayLight.App.Infrastructure.Tray;
 
@@ -18,6 +19,9 @@ internal static class TrayNativeMethods
     [DllImport("user32.dll", EntryPoint = "GetCursorPos", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetCursorPosition(out NativePoint point);
+
+    [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconGetRect")]
+    internal static extern int GetNotifyIconRectangle(in NotifyIconIdentifier identifier, out NativeRectangleInterop rectangle);
 }
 #pragma warning restore SYSLIB1054
 
@@ -74,4 +78,24 @@ internal struct NativePoint
 {
     internal int X;
     internal int Y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NotifyIconIdentifier
+{
+    internal uint Size;
+    internal nint WindowHandle;
+    internal uint Identifier;
+    internal Guid ItemGuid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeRectangleInterop
+{
+    internal int Left;
+    internal int Top;
+    internal int Right;
+    internal int Bottom;
+
+    internal readonly NativeRectangle ToRectangle() => new(Left, Top, Right, Bottom);
 }

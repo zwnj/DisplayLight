@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using DisplayLight.App.Infrastructure.Flyout;
 using DisplayLight.App.Presentation;
 
 namespace DisplayLight.App.Infrastructure.Tray;
@@ -25,11 +26,9 @@ internal sealed class TrayIconService : IDisposable
     private const int MaximumIconRestoreAttempts = 5;
 
     private readonly MainWindowViewModel viewModel;
-    private readonly Action showWindow;
+    private readonly Action<TrayActivation> activateWindow;
     private readonly Action exitApplication;
     private readonly ContextMenu contextMenu;
-    private readonly MenuItem sleepPreventionItem;
-    private readonly MenuItem acPowerOnlyItem;
 
     private HwndSource? windowSource;
     private nint windowHandle;
@@ -40,23 +39,17 @@ internal sealed class TrayIconService : IDisposable
     private DispatcherTimer? iconRestoreTimer;
     private int iconRestoreAttempts;
 
-    public TrayIconService(MainWindowViewModel viewModel, Action showWindow, Action exitApplication)
+    public TrayIconService(
+        MainWindowViewModel viewModel,
+        Action<TrayActivation> activateWindow,
+        Action exitApplication)
     {
         this.viewModel = viewModel;
-        this.showWindow = showWindow;
+        this.activateWindow = activateWindow;
         this.exitApplication = exitApplication;
 
         MenuItem openItem = new() { Header = "DisplayLightを開く" };
-        openItem.Click += (_, _) => showWindow();
-
-        sleepPreventionItem = new() { IsCheckable = true };
-        sleepPreventionItem.Click += (_, _) => viewModel.ToggleSleepPreventionCommand.Execute(parameter: null);
-
-        acPowerOnlyItem = new() { Header = "AC電源接続時のみ有効", IsCheckable = true };
-        acPowerOnlyItem.Click += HandleAcPowerOnlyClick;
-
-        MenuItem refreshItem = new() { Header = "設定を再読み込み" };
-        refreshItem.Click += (_, _) => viewModel.RefreshCommand.Execute(parameter: null);
+        openItem.Click += (_, _) => activateWindow(CreateActivation(isKeyboardInvocation: false));
 
         MenuItem exitItem = new() { Header = "終了" };
         exitItem.Click += (_, _) => exitApplication();
@@ -67,14 +60,9 @@ internal sealed class TrayIconService : IDisposable
             {
                 openItem,
                 new Separator(),
-                sleepPreventionItem,
-                acPowerOnlyItem,
-                new Separator(),
-                refreshItem,
                 exitItem,
             },
         };
-        contextMenu.Opened += HandleContextMenuOpened;
         contextMenu.Closed += HandleContextMenuClosed;
     }
 
@@ -113,7 +101,6 @@ internal sealed class TrayIconService : IDisposable
 
         isDisposed = true;
         viewModel.PropertyChanged -= HandleViewModelPropertyChanged;
-        contextMenu.Opened -= HandleContextMenuOpened;
         contextMenu.Closed -= HandleContextMenuClosed;
         contextMenu.IsOpen = false;
         StopIconRestoreTimer();
@@ -202,7 +189,7 @@ internal sealed class TrayIconService : IDisposable
 
             if (eventCode is NotifySelect or NotifyKeySelect)
             {
-                showWindow();
+                activateWindow(CreateActivation(eventCode == NotifyKeySelect));
                 handled = true;
             }
             else if (eventCode == WindowContextMenu)
@@ -275,7 +262,7 @@ internal sealed class TrayIconService : IDisposable
         {
             StopIconRestoreTimer();
             isAdded = false;
-            showWindow();
+            activateWindow(CreateActivation(isKeyboardInvocation: false));
         }
     }
 
@@ -303,15 +290,6 @@ internal sealed class TrayIconService : IDisposable
         iconRestoreTimer = null;
     }
 
-    private void HandleContextMenuOpened(object sender, RoutedEventArgs e)
-    {
-        sleepPreventionItem.Header = viewModel.IsSleepPreventionRequested
-            ? "スリープ防止を解除"
-            : "スリープ防止を開始";
-        sleepPreventionItem.IsChecked = viewModel.IsSleepPreventionRequested;
-        acPowerOnlyItem.IsChecked = viewModel.IsAcPowerOnly;
-    }
-
     private void HandleContextMenuClosed(object sender, RoutedEventArgs e)
     {
         if (!isAdded)
@@ -321,12 +299,6 @@ internal sealed class TrayIconService : IDisposable
 
         NotifyIconData data = CreateData(NotifyIconFlags.None);
         _ = TrayNativeMethods.ShellNotifyIcon(NotifyIconMessage.SetFocus, ref data);
-    }
-
-    private void HandleAcPowerOnlyClick(object sender, RoutedEventArgs e)
-    {
-        viewModel.IsAcPowerOnly = acPowerOnlyItem.IsChecked;
-        viewModel.UpdateAcPowerOnlyCommand.Execute(parameter: null);
     }
 
     private void HandleViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -339,4 +311,34 @@ internal sealed class TrayIconService : IDisposable
     }
 
     private static string LimitToolTip(string value) => value.Length < 128 ? value : value[..127];
+
+    internal void RestoreNotificationAreaFocus()
+    {
+        if (!isAdded)
+        {
+            return;
+        }
+
+        NotifyIconData data = CreateData(NotifyIconFlags.None);
+        _ = TrayNativeMethods.ShellNotifyIcon(NotifyIconMessage.SetFocus, ref data);
+    }
+
+    internal NativeRectangle? TryGetIconBounds()
+    {
+        NotifyIconIdentifier identifier = new()
+        {
+            Size = (uint)Marshal.SizeOf<NotifyIconIdentifier>(),
+            WindowHandle = windowHandle,
+            Identifier = IconIdentifier,
+        };
+
+        return TrayNativeMethods.GetNotifyIconRectangle(in identifier, out NativeRectangleInterop rectangle) >= 0
+            ? rectangle.ToRectangle()
+            : null;
+    }
+
+    private TrayActivation CreateActivation(bool isKeyboardInvocation) =>
+        new(TryGetIconBounds(), isKeyboardInvocation);
 }
+
+internal readonly record struct TrayActivation(NativeRectangle? IconBounds, bool IsKeyboardInvocation);

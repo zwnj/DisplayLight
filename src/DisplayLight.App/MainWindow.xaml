@@ -3,224 +3,469 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:DisplayLight.App.Presentation.Controls"
         mc:Ignorable="d"
         Title="DisplayLight"
-        Width="620"
-        Height="700"
-        MinWidth="560"
-        MinHeight="560"
-        WindowStartupLocation="CenterScreen"
-        Background="#F4F6FA">
+        Width="372"
+        SizeToContent="Height"
+        MaxHeight="720"
+        WindowStartupLocation="Manual"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        Background="Transparent"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        Deactivated="Window_Deactivated"
+        PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="#E2E8F0" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Padding" Value="20" />
-            <Setter Property="Margin" Value="0,0,0,14" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <controls:CurrentPresetMarkerVisibilityConverter x:Key="CurrentPresetMarkerVisibilityConverter" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="16,9" />
-            <Setter Property="MinHeight" Value="38" />
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style x:Key="QuietButtonStyle" TargetType="Button">
+            <Setter Property="MinWidth" Value="44" />
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="#E8EDF5" />
-            <Setter Property="Foreground" Value="#172033" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="2"
+                                CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#315EFB" />
-            <Setter Property="Foreground" Value="White" />
+
+        <Style x:Key="QuietToggleStyle" TargetType="ToggleButton">
+            <Setter Property="MinWidth" Value="44" />
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="2"
+                                CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ToggleTrackStyle" TargetType="Border">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ToggleThumbStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Fill" Value="{DynamicResource SurfaceBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Value="True">
+                    <Setter Property="HorizontalAlignment" Value="Right" />
+                    <Setter Property="Fill" Value="{DynamicResource AccentTextBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ApplyButtonStyle" TargetType="Button" BasedOn="{StaticResource QuietButtonStyle}">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#172033" />
+
+        <Style x:Key="PresetItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="MinWidth" Value="44" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Height="58" Background="Transparent">
+                            <Ellipse x:Name="Tick"
+                                     Width="6"
+                                     Height="6"
+                                     Margin="0,10,0,0"
+                                     VerticalAlignment="Top"
+                                     Fill="{DynamicResource TextSecondaryBrush}" />
+                            <Ellipse Width="12"
+                                     Height="12"
+                                     Margin="0,7,0,0"
+                                     VerticalAlignment="Top"
+                                     Fill="{DynamicResource SurfaceElevatedBrush}"
+                                     Stroke="{DynamicResource TextPrimaryBrush}"
+                                     StrokeThickness="2">
+                                <Ellipse.Visibility>
+                                    <MultiBinding Converter="{StaticResource CurrentPresetMarkerVisibilityConverter}">
+                                        <Binding RelativeSource="{RelativeSource TemplatedParent}" Path="(ItemsControl.AlternationIndex)" />
+                                        <Binding RelativeSource="{RelativeSource AncestorType={x:Type controls:DiscretePresetListBox}}" Path="CurrentIndex" />
+                                        <Binding RelativeSource="{RelativeSource AncestorType={x:Type controls:DiscretePresetListBox}}" Path="HasPendingChange" />
+                                    </MultiBinding>
+                                </Ellipse.Visibility>
+                            </Ellipse>
+                            <Ellipse x:Name="Thumb"
+                                     Width="16"
+                                     Height="16"
+                                     Margin="0,5,0,0"
+                                     VerticalAlignment="Top"
+                                     Fill="{DynamicResource AccentBrush}"
+                                     Stroke="{DynamicResource AccentTextBrush}"
+                                     StrokeThickness="2"
+                                     Visibility="Collapsed" />
+                            <Ellipse x:Name="FocusRing"
+                                     Width="24"
+                                     Height="24"
+                                     Margin="0,1,0,0"
+                                     VerticalAlignment="Top"
+                                     Fill="Transparent"
+                                     Stroke="{DynamicResource AccentBrush}"
+                                     StrokeThickness="2"
+                                     Visibility="Collapsed" />
+                            <ContentPresenter Margin="0,31,0,0"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Top"
+                                              TextElement.FontSize="11" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Thumb" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Tick" Property="Visibility" Value="Collapsed" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style TargetType="Slider">
-            <Setter Property="Margin" Value="0,12,0,4" />
-            <Setter Property="IsSnapToTickEnabled" Value="True" />
-            <Setter Property="TickFrequency" Value="1" />
-            <Setter Property="Minimum" Value="0" />
-            <Setter Property="Maximum" Value="5" />
+
+        <Style x:Key="PresetListStyle" TargetType="controls:DiscretePresetListBox">
+            <Setter Property="Height" Value="60" />
+            <Setter Property="AlternationCount" Value="6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" Columns="6" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="controls:DiscretePresetListBox">
+                        <Grid>
+                            <Border Height="2"
+                                    Margin="26,12,26,0"
+                                    VerticalAlignment="Top"
+                                    Background="{DynamicResource BorderBrush}" />
+                            <ItemsPresenter />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Border BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="14"
+            Background="{DynamicResource SurfaceBrush}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Focusable="False">
+            <StackPanel Margin="20,14,20,18">
+                <Grid Height="44">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="DisplayLight"
+                               FontSize="14"
+                               FontWeight="Normal"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               AutomationProperties.HeadingLevel="Level1" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding PowerSourceText}"
+                               Margin="0,0,6,0"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               VerticalAlignment="Center" />
+                    <Button x:Name="MoreButton"
+                            Grid.Column="2"
+                            Content="⋯"
+                            FontSize="18"
+                            Style="{StaticResource QuietButtonStyle}"
+                            AutomationProperties.Name="その他の操作"
+                            Click="MoreButton_Click">
+                        <Button.ContextMenu>
+                            <ContextMenu Opened="AuxiliaryMenu_Opened" Closed="AuxiliaryMenu_Closed">
+                                <MenuItem Header="設定を再読み込み" Command="{Binding RefreshCommand}" />
+                                <Separator />
+                                <MenuItem Header="DisplayLightを終了" Click="ExitMenuItem_Click" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </Grid>
 
-        <Border Grid.Row="0" Background="#172033" Padding="28,24">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel>
-                    <TextBlock Text="DisplayLight" FontSize="28" FontWeight="SemiBold" Foreground="White" />
-                    <TextBlock Text="ディスプレイとスリープを、必要なときだけ制御します。"
-                               Margin="0,6,0,0"
-                               Foreground="#B8C3D9" />
-                </StackPanel>
-                <Border Grid.Column="1"
-                        Padding="12,7"
-                        CornerRadius="16"
-                        Background="#26344F"
-                        VerticalAlignment="Center">
-                    <TextBlock Text="{Binding PowerSourceText}" Foreground="#E8EDF8" FontWeight="SemiBold" />
-                </Border>
-            </Grid>
-        </Border>
-
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="24,22,24,10">
-                <TextBlock Text="ディスプレイ消灯" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="現在のWindows電源プランを直接変更します。変更値はアプリ終了後も残ります。"
-                           Margin="0,5,0,16"
-                           Foreground="#596579"
-                           TextWrapping="Wrap" />
-
-                <Border Style="{StaticResource CardStyle}">
+                <Border Margin="0,8,0,0"
+                        Padding="16,14"
+                        CornerRadius="12"
+                        Background="{DynamicResource SurfaceElevatedBrush}">
                     <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="AC電源時" FontSize="17" FontWeight="SemiBold" />
-                                <TextBlock Margin="0,3,0,0" Foreground="#657186">
-                                    <Run Text="現在: " />
-                                    <Run Text="{Binding CurrentAcText, Mode=OneWay}" FontWeight="SemiBold" />
-                                </TextBlock>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding SelectedAcText}"
-                                       FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Foreground="#315EFB"
-                                       VerticalAlignment="Center" />
-                        </Grid>
-                        <Slider Value="{Binding SelectedAcSliderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <UniformGrid Columns="6" Margin="0,0,0,12">
-                            <TextBlock Text="1分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="5分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="10分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="30分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="60分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="無期限" FontSize="11" TextAlignment="Center" />
-                        </UniformGrid>
-                        <Button Content="AC電源時に適用"
-                                Command="{Binding ApplyAcCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                HorizontalAlignment="Right" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource CardStyle}">
-                    <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="バッテリー時" FontSize="17" FontWeight="SemiBold" />
-                                <TextBlock Margin="0,3,0,0" Foreground="#657186">
-                                    <Run Text="現在: " />
-                                    <Run Text="{Binding CurrentBatteryText, Mode=OneWay}" FontWeight="SemiBold" />
-                                </TextBlock>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding SelectedBatteryText}"
-                                       FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Foreground="#315EFB"
-                                       VerticalAlignment="Center" />
-                        </Grid>
-                        <Slider Value="{Binding SelectedBatterySliderValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <UniformGrid Columns="6" Margin="0,0,0,12">
-                            <TextBlock Text="1分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="5分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="10分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="30分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="60分" FontSize="11" TextAlignment="Center" />
-                            <TextBlock Text="無期限" FontSize="11" TextAlignment="Center" />
-                        </UniformGrid>
-                        <Button Content="バッテリー時に適用"
-                                Command="{Binding ApplyBatteryCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                HorizontalAlignment="Right" />
-                    </StackPanel>
-                </Border>
-
-                <TextBlock Text="手動スリープ防止" FontSize="20" FontWeight="SemiBold" Margin="0,8,0,12" />
-                <Border Style="{StaticResource CardStyle}">
-                    <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="システムスリープ" FontSize="17" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding SleepPreventionStatusText}"
-                                           Margin="0,4,0,0"
-                                           Foreground="#657186" />
-                            </StackPanel>
-                            <Ellipse Grid.Column="1"
-                                     Width="12"
-                                     Height="12"
-                                     Margin="12,0,0,0"
-                                     VerticalAlignment="Center">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Fill" Value="#94A3B8" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsSleepPreventionActive}" Value="True">
-                                                <Setter Property="Fill" Value="#22A06B" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                        </Grid>
-                        <TextBlock Text="ディスプレイは設定時間どおり消灯できます。電源ボタンや蓋による明示的なスリープも妨げません。"
-                                   Margin="0,12,0,14"
-                                   Foreground="#596579"
-                                   TextWrapping="Wrap" />
-                        <CheckBox Content="AC電源接続時のみ有効"
+                        <ToggleButton x:Name="SleepToggleButton"
+                                      IsChecked="{Binding IsSleepPreventionRequested, Mode=OneWay}"
+                                      Command="{Binding ToggleSleepPreventionCommand}"
+                                      Style="{StaticResource QuietToggleStyle}"
+                                      Padding="0"
+                                      AutomationProperties.Name="{Binding SleepPreventionAutomationName}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="スリープ防止"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding SleepPreventionStatusText}"
+                                               Margin="0,2,0,0"
+                                               FontSize="20"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="アイドルスリープだけを防止"
+                                               Margin="0,3,0,0"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </StackPanel>
+                                <Border Grid.Column="1"
+                                        Style="{StaticResource ToggleTrackStyle}"
+                                        VerticalAlignment="Center">
+                                    <Ellipse Style="{StaticResource ToggleThumbStyle}" />
+                                </Border>
+                            </Grid>
+                        </ToggleButton>
+                        <CheckBox Content="AC電源接続時のみ"
                                   IsChecked="{Binding IsAcPowerOnly, Mode=TwoWay}"
                                   Command="{Binding UpdateAcPowerOnlyCommand}"
-                                  Margin="0,0,0,14" />
-                        <Button Content="{Binding SleepToggleButtonText}"
-                                Command="{Binding ToggleSleepPreventionCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                HorizontalAlignment="Left" />
+                                  MinHeight="44"
+                                  Margin="0,6,0,0"
+                                  VerticalContentAlignment="Center" />
+                        <TextBlock Text="{Binding SleepErrorMessage}"
+                                   Visibility="{Binding HasSleepError, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                   Margin="0,4,0,0"
+                                   Foreground="{DynamicResource ErrorBrush}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Assertive" />
                     </StackPanel>
+                </Border>
+
+                <TextBlock Text="ディスプレイ消灯時間"
+                           Margin="2,20,2,8"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           AutomationProperties.HeadingLevel="Level2" />
+
+                <Border CornerRadius="12" Background="{DynamicResource SurfaceElevatedBrush}">
+                    <StackPanel>
+                        <ToggleButton IsChecked="{Binding IsAcExpanded, Mode=OneWay}"
+                                      Style="{StaticResource QuietToggleStyle}"
+                                      Click="ExpandAc_Click"
+                                      AutomationProperties.Name="{Binding AcExpansionAutomationName}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="24" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="AC電源時" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentAcText, StringFormat=現在 {0}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding AcChevronText}" FontSize="14" TextAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                        </ToggleButton>
+                        <StackPanel Visibility="{Binding IsAcExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Margin="12,0,12,12">
+                            <Grid Visibility="{Binding HasPendingAcChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                  Margin="4,0,4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="変更後" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedAcText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                            </Grid>
+                            <controls:DiscretePresetListBox x:Name="AcPresetList"
+                                                            SelectedIndex="{Binding SelectedAcPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentAcPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingAcChange}"
+                                                            Style="{StaticResource PresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
+                                                            AutomationProperties.Name="AC電源時の消灯時間">
+                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
+                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
+                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
+                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
+                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
+                                <ListBoxItem Content="無期限" AutomationProperties.Name="無期限" />
+                            </controls:DiscretePresetListBox>
+                            <Button Content="適用"
+                                    Command="{Binding ApplyAcCommand}"
+                                    Visibility="{Binding HasPendingAcChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource ApplyButtonStyle}"
+                                    AutomationProperties.Name="AC電源時の消灯時間を適用" />
+                            <TextBlock Text="{Binding AcErrorMessage}"
+                                       Visibility="{Binding HasAcError, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       Margin="4,6,4,0"
+                                       Foreground="{DynamicResource ErrorBrush}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Assertive" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,8,0,0" CornerRadius="12" Background="{DynamicResource SurfaceElevatedBrush}">
+                    <StackPanel>
+                        <ToggleButton IsChecked="{Binding IsBatteryExpanded, Mode=OneWay}"
+                                      Style="{StaticResource QuietToggleStyle}"
+                                      Click="ExpandBattery_Click"
+                                      AutomationProperties.Name="{Binding BatteryExpansionAutomationName}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="24" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="バッテリー時" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentBatteryText, StringFormat=現在 {0}}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding BatteryChevronText}" FontSize="14" TextAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                        </ToggleButton>
+                        <StackPanel Visibility="{Binding IsBatteryExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    Margin="12,0,12,12">
+                            <Grid Visibility="{Binding HasPendingBatteryChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                  Margin="4,0,4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="変更後" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding SelectedBatteryText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                            </Grid>
+                            <controls:DiscretePresetListBox x:Name="BatteryPresetList"
+                                                            SelectedIndex="{Binding SelectedBatteryPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentBatteryPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingBatteryChange}"
+                                                            Style="{StaticResource PresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
+                                                            AutomationProperties.Name="バッテリー時の消灯時間">
+                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
+                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
+                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
+                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
+                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
+                                <ListBoxItem Content="無期限" AutomationProperties.Name="無期限" />
+                            </controls:DiscretePresetListBox>
+                            <Button Content="適用"
+                                    Command="{Binding ApplyBatteryCommand}"
+                                    Visibility="{Binding HasPendingBatteryChange, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource ApplyButtonStyle}"
+                                    AutomationProperties.Name="バッテリー時の消灯時間を適用" />
+                            <TextBlock Text="{Binding BatteryErrorMessage}"
+                                       Visibility="{Binding HasBatteryError, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       Margin="4,6,4,0"
+                                       Foreground="{DynamicResource ErrorBrush}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Assertive" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,10,0,0"
+                        Padding="10,8"
+                        CornerRadius="9"
+                        Background="{DynamicResource HoverBrush}"
+                        Visibility="{Binding HasStatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock Text="{Binding StatusMessage}"
+                               FontSize="11"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.LiveSetting="Polite" />
                 </Border>
             </StackPanel>
         </ScrollViewer>
-
-        <Border Grid.Row="2" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="18,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{Binding StatusMessage}"
-                           Foreground="#596579"
-                           TextWrapping="Wrap"
-                           VerticalAlignment="Center"
-                           Margin="0,0,16,0" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Content="再読み込み" Command="{Binding RefreshCommand}" Margin="0,0,8,0" />
-                    <Button Content="隠す" Click="HideButton_Click" Margin="0,0,8,0" />
-                    <Button Content="終了" Click="ExitButton_Click" />
-                </StackPanel>
-            </Grid>
-        </Border>
-    </Grid>
+    </Border>
 </Window>

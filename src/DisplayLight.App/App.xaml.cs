@@ -15,6 +15,7 @@ public partial class App : Application, IDisposable
     private MainWindowViewModel? viewModel;
     private MainWindow? mainWindow;
     private TrayIconService? trayIconService;
+    private ApplicationThemeManager? themeManager;
     private bool isShuttingDown;
     private bool isCleanedUp;
 
@@ -41,6 +42,8 @@ public partial class App : Application, IDisposable
             IPowerSourceProvider powerSourceProvider = new WindowsPowerSourceProvider();
             IUserSettingsStore settingsStore = new JsonUserSettingsStore();
 
+            themeManager = new ApplicationThemeManager(Resources);
+
             viewModel = new MainWindowViewModel(
                 displayTimeoutService,
                 sleepPreventionService,
@@ -52,10 +55,13 @@ public partial class App : Application, IDisposable
             };
             MainWindow = mainWindow;
             mainWindow.ExitRequested += HandleExitRequested;
-            mainWindow.Show();
+            mainWindow.FlyoutHidden += HandleFlyoutHidden;
+            themeManager.ThemeChanged += HandleThemeChanged;
+            mainWindow.ApplyTheme(themeManager.UseLightTheme);
 
-            trayIconService = new TrayIconService(viewModel, ShowMainWindow, RequestShutdown);
+            trayIconService = new TrayIconService(viewModel, ToggleMainWindow, RequestShutdown);
             trayIconService.Initialize(mainWindow);
+            ShowMainWindow();
             await viewModel.InitializeAsync();
         }
         catch (Exception exception)
@@ -88,7 +94,28 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        mainWindow.ShowAndActivate();
+        mainWindow.ShowAt(iconBounds: null, focusPrimaryAction: false);
+    }
+
+    private void ToggleMainWindow(TrayActivation activation)
+    {
+        if (mainWindow is null || isShuttingDown)
+        {
+            return;
+        }
+
+        mainWindow.ToggleAt(activation.IconBounds, activation.IsKeyboardInvocation);
+    }
+
+    private void HandleFlyoutHidden(object? sender, EventArgs e) =>
+        trayIconService?.RestoreNotificationAreaFocus();
+
+    private void HandleThemeChanged(object? sender, EventArgs e)
+    {
+        if (themeManager is not null)
+        {
+            mainWindow?.ApplyTheme(themeManager.UseLightTheme);
+        }
     }
 
     private void HandleExitRequested(object? sender, EventArgs e) => RequestShutdown();
@@ -119,6 +146,14 @@ public partial class App : Application, IDisposable
         TryCleanup(() => trayIconService?.Dispose());
         trayIconService = null;
 
+        if (themeManager is not null)
+        {
+            themeManager.ThemeChanged -= HandleThemeChanged;
+        }
+
+        TryCleanup(() => themeManager?.Dispose());
+        themeManager = null;
+
         TryCleanup(() => viewModel?.Dispose());
         viewModel = null;
 
@@ -128,6 +163,7 @@ public partial class App : Application, IDisposable
         if (mainWindow is not null)
         {
             mainWindow.ExitRequested -= HandleExitRequested;
+            mainWindow.FlyoutHidden -= HandleFlyoutHidden;
             mainWindow.AllowClose();
             TryCleanup(mainWindow.Close);
             mainWindow = null;

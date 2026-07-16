@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using DisplayLight.App.Presentation;
 using DisplayLight.Core.Abstractions;
 using DisplayLight.Core.Power;
@@ -74,6 +75,70 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(DisplayTimeoutPreset.SixtyMinutes, settingsStore.LastSaved?.SelectedAcTimeout);
         Assert.Equal("60分", viewModel.CurrentAcText);
         Assert.Equal(5, viewModel.SelectedBatterySliderValue);
+        Assert.False(viewModel.HasPendingAcChange);
+        Assert.True(viewModel.HasPendingBatteryChange);
+    }
+
+    [Fact]
+    public async Task InitializesExpandedSectionFromCurrentPowerSource()
+    {
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeSleepPreventionService(),
+            new FakePowerSourceProvider(PowerSource.Battery),
+            new FakeSettingsStore(new UserSettings()));
+
+        await viewModel.InitializeAsync();
+
+        Assert.False(viewModel.IsAcExpanded);
+        Assert.True(viewModel.IsBatteryExpanded);
+        Assert.Equal("電源：バッテリー駆動", viewModel.PowerSourceText);
+        Assert.Equal("AC電源時の消灯時間を展開", viewModel.AcExpansionAutomationName);
+        Assert.Equal("バッテリー時の消灯時間を折りたたむ", viewModel.BatteryExpansionAutomationName);
+        Assert.Equal("⌄", viewModel.AcChevronText);
+        Assert.Equal("⌃", viewModel.BatteryChevronText);
+    }
+
+    [Fact]
+    public async Task PendingStateOnlyAppearsWhenSelectionDiffersFromCurrentValue()
+    {
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeSleepPreventionService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+
+        Assert.False(viewModel.HasPendingAcChange);
+        Assert.Equal(2, viewModel.CurrentAcPresetIndex);
+        viewModel.SelectedAcPresetIndex = 4;
+        Assert.True(viewModel.HasPendingAcChange);
+        viewModel.SelectedAcPresetIndex = 2;
+        Assert.False(viewModel.HasPendingAcChange);
+    }
+
+    [Fact]
+    public async Task ApplyFailureRemainsOnTheAffectedSection()
+    {
+        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(600, 300))
+        {
+            SetException = new Win32Exception(5, "AC設定を変更できませんでした。"),
+        };
+        using MainWindowViewModel viewModel = new(
+            displayService,
+            new FakeSleepPreventionService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+        viewModel.SelectedAcPresetIndex = 4;
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyAcCommand);
+
+        await command.ExecuteAsync();
+
+        Assert.True(viewModel.HasAcError);
+        Assert.False(viewModel.HasBatteryError);
+        Assert.Contains("Windowsエラー 5", viewModel.AcErrorMessage, StringComparison.Ordinal);
+        Assert.True(viewModel.HasPendingAcChange);
     }
 
     [Fact]
@@ -107,6 +172,8 @@ public sealed class MainWindowViewModelTests
 
         public DisplayTimeoutPreset LastPreset { get; private set; }
 
+        public Exception? SetException { get; init; }
+
         public Task<DisplayTimeoutValues> ReadAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(values);
 
@@ -115,6 +182,11 @@ public sealed class MainWindowViewModelTests
             DisplayTimeoutPreset preset,
             CancellationToken cancellationToken = default)
         {
+            if (SetException is not null)
+            {
+                throw SetException;
+            }
+
             LastTarget = target;
             LastPreset = preset;
             uint seconds = DisplayTimeoutCatalog.ToSeconds(preset);
