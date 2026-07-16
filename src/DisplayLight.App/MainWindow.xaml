@@ -347,7 +347,7 @@
     <Border x:Name="FlyoutSurface"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="0"
+            CornerRadius="8"
             Background="{DynamicResource SurfaceBrush}">
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"

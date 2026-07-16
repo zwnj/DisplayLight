@@ -10,6 +10,7 @@ internal static class FlyoutPositioner
 {
     private const uint MonitorDefaultToNearest = 2;
     private const uint SetWindowPositionNoActivate = 0x0010;
+    private const uint SetWindowPositionNoSize = 0x0001;
     private const uint SetWindowPositionNoZOrder = 0x0004;
 
     internal static FlyoutWindowPlacement Calculate(Window window, NativeRectangle? iconBounds)
@@ -24,6 +25,18 @@ internal static class FlyoutPositioner
         if (monitor == nint.Zero || !NativeMethods.GetMonitorInformation(monitor, ref monitorInformation))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "フライアウトを表示するモニターを取得できませんでした。");
+        }
+
+        if (!window.IsVisible && !NativeMethods.SetWindowPosition(
+                handle,
+                nint.Zero,
+                anchor.Left,
+                anchor.Top,
+                0,
+                0,
+                SetWindowPositionNoActivate | SetWindowPositionNoSize | SetWindowPositionNoZOrder))
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "フライアウトの表示先DPIを取得する準備に失敗しました。");
         }
 
         uint dpi = NativeMethods.GetDpiForWindow(handle);

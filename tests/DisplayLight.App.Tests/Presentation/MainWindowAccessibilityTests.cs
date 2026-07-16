@@ -38,7 +38,7 @@ public sealed class MainWindowAccessibilityTests
                 Assert.True(window.BatteryApplyButton.MinHeight >= 44);
                 Assert.Equal(44, window.AcActionRow.Height);
                 Assert.Equal(44, window.BatteryActionRow.Height);
-                Assert.Equal(new CornerRadius(0), window.FlyoutSurface.CornerRadius);
+                Assert.Equal(new CornerRadius(8), window.FlyoutSurface.CornerRadius);
             }
             finally
             {
