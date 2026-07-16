@@ -344,9 +344,10 @@
         </Style>
     </Window.Resources>
 
-    <Border BorderBrush="{DynamicResource BorderBrush}"
+    <Border x:Name="FlyoutSurface"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="14"
+            CornerRadius="0"
             Background="{DynamicResource SurfaceBrush}">
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"

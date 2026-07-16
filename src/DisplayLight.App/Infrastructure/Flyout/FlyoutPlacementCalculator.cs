@@ -5,7 +5,7 @@ internal static class FlyoutPlacementCalculator
     internal const int DefaultGap = 8;
     internal const int DefaultWorkAreaMargin = 12;
 
-    internal static NativePoint Calculate(
+    internal static FlyoutPlacement Calculate(
         NativeRectangle iconBounds,
         NativeRectangle workArea,
         NativeSize flyoutSize,
@@ -23,36 +23,53 @@ internal static class FlyoutPlacementCalculator
         int distanceToBottom = Math.Abs(workArea.Bottom - centerY);
         int nearestEdge = Math.Min(Math.Min(distanceToLeft, distanceToRight), Math.Min(distanceToTop, distanceToBottom));
 
+        TaskbarEdge edge;
         int x;
         int y;
         if (nearestEdge == distanceToBottom)
         {
-            x = iconBounds.Right - flyoutSize.Width;
+            edge = TaskbarEdge.Bottom;
+            x = centerX - (flyoutSize.Width / 2);
             y = iconBounds.Top - flyoutSize.Height - gap;
         }
         else if (nearestEdge == distanceToTop)
         {
-            x = iconBounds.Right - flyoutSize.Width;
+            edge = TaskbarEdge.Top;
+            x = centerX - (flyoutSize.Width / 2);
             y = iconBounds.Bottom + gap;
         }
         else if (nearestEdge == distanceToLeft)
         {
+            edge = TaskbarEdge.Left;
             x = iconBounds.Right + gap;
-            y = iconBounds.Bottom - flyoutSize.Height;
+            y = centerY - (flyoutSize.Height / 2);
         }
         else
         {
+            edge = TaskbarEdge.Right;
             x = iconBounds.Left - flyoutSize.Width - gap;
-            y = iconBounds.Bottom - flyoutSize.Height;
+            y = centerY - (flyoutSize.Height / 2);
         }
 
         int maximumX = Math.Max(workArea.Left + margin, workArea.Right - margin - flyoutSize.Width);
         int maximumY = Math.Max(workArea.Top + margin, workArea.Bottom - margin - flyoutSize.Height);
-        return new NativePoint(
-            Math.Clamp(x, workArea.Left + margin, maximumX),
-            Math.Clamp(y, workArea.Top + margin, maximumY));
+        return new FlyoutPlacement(
+            new NativePoint(
+                Math.Clamp(x, workArea.Left + margin, maximumX),
+                Math.Clamp(y, workArea.Top + margin, maximumY)),
+            edge);
     }
 }
+
+internal enum TaskbarEdge
+{
+    Bottom,
+    Top,
+    Left,
+    Right,
+}
+
+internal readonly record struct FlyoutPlacement(NativePoint Location, TaskbarEdge Edge);
 
 internal readonly record struct NativePoint(int X, int Y);
 

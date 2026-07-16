@@ -12,7 +12,7 @@ internal static class FlyoutPositioner
     private const uint SetWindowPositionNoActivate = 0x0010;
     private const uint SetWindowPositionNoZOrder = 0x0004;
 
-    internal static void Position(Window window, NativeRectangle? iconBounds)
+    internal static FlyoutWindowPlacement Calculate(Window window, NativeRectangle? iconBounds)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -45,19 +45,35 @@ internal static class FlyoutPositioner
 
         int width = Math.Max(1, (int)Math.Ceiling(logicalWidth * dpi / 96d));
         int height = Math.Max(1, (int)Math.Ceiling(logicalHeight * dpi / 96d));
-        NativePoint location = FlyoutPlacementCalculator.Calculate(anchor, workArea, new NativeSize(width, height));
+        NativeSize size = new(width, height);
+        FlyoutPlacement placement = FlyoutPlacementCalculator.Calculate(anchor, workArea, size);
+        return new FlyoutWindowPlacement(placement.Location, size, placement.Edge, dpi / 96d);
+    }
+
+    internal static void Move(Window window, FlyoutWindowPlacement placement, NativePoint location)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        nint handle = new WindowInteropHelper(window).EnsureHandle();
 
         if (!NativeMethods.SetWindowPosition(
                 handle,
                 nint.Zero,
                 location.X,
                 location.Y,
-                width,
-                height,
+                placement.Size.Width,
+                placement.Size.Height,
                 SetWindowPositionNoActivate | SetWindowPositionNoZOrder))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "フライアウトを通知領域の近くへ配置できませんでした。");
         }
+    }
+
+    internal static FlyoutWindowPlacement Position(Window window, NativeRectangle? iconBounds)
+    {
+        FlyoutWindowPlacement placement = Calculate(window, iconBounds);
+        Move(window, placement, placement.Location);
+        return placement;
     }
 
     internal static void ApplyWindowAppearance(Window window)
@@ -184,3 +200,9 @@ internal static class FlyoutPositioner
         }
     }
 }
+
+internal readonly record struct FlyoutWindowPlacement(
+    NativePoint Location,
+    NativeSize Size,
+    TaskbarEdge Edge,
+    double DpiScale);
