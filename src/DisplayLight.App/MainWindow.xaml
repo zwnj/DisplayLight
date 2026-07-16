@@ -471,7 +471,8 @@
                         </ToggleButton>
                         <StackPanel Visibility="{Binding IsAcExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="12,0,12,12">
-                            <Grid Visibility="{Binding HasAcSelectionSummary, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            <Grid x:Name="AcActionRow"
+                                  Height="44"
                                   Margin="4,0,4,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -484,10 +485,19 @@
                                         Grid.Column="2"
                                         Content="適用"
                                         Command="{Binding ApplyAcCommand}"
-                                        Visibility="{Binding HasPendingAcChange, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         Margin="10,0,0,0"
-                                        Style="{StaticResource ApplyButtonStyle}"
-                                        AutomationProperties.Name="AC電源時の消灯時間を適用" />
+                                        AutomationProperties.Name="AC電源時の消灯時間を適用">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ApplyButtonStyle}">
+                                            <Setter Property="Visibility" Value="Hidden" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPendingAcChange}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                             </Grid>
                             <controls:DiscretePresetListBox x:Name="AcPresetList"
                                                             SelectedIndex="{Binding SelectedAcPresetIndex, Mode=TwoWay}"
@@ -539,7 +549,8 @@
                         </ToggleButton>
                         <StackPanel Visibility="{Binding IsBatteryExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="12,0,12,12">
-                            <Grid Visibility="{Binding HasBatterySelectionSummary, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            <Grid x:Name="BatteryActionRow"
+                                  Height="44"
                                   Margin="4,0,4,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -552,10 +563,19 @@
                                         Grid.Column="2"
                                         Content="適用"
                                         Command="{Binding ApplyBatteryCommand}"
-                                        Visibility="{Binding HasPendingBatteryChange, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         Margin="10,0,0,0"
-                                        Style="{StaticResource ApplyButtonStyle}"
-                                        AutomationProperties.Name="バッテリー時の消灯時間を適用" />
+                                        AutomationProperties.Name="バッテリー時の消灯時間を適用">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ApplyButtonStyle}">
+                                            <Setter Property="Visibility" Value="Hidden" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPendingBatteryChange}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                             </Grid>
                             <controls:DiscretePresetListBox x:Name="BatteryPresetList"
                                                             SelectedIndex="{Binding SelectedBatteryPresetIndex, Mode=TwoWay}"

@@ -31,7 +31,6 @@ public sealed class MainWindowViewModelTests
         Assert.True(viewModel.IsCurrentAcCustom);
         Assert.Equal(3, viewModel.SelectedAcSliderValue);
         Assert.False(viewModel.HasPendingAcChange);
-        Assert.True(viewModel.HasAcSelectionSummary);
         Assert.Equal("前回選択", viewModel.AcSelectionCaption);
         Assert.Equal("5分", viewModel.CurrentBatteryText);
         Assert.Equal(1, viewModel.SelectedBatterySliderValue);

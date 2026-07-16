@@ -104,7 +104,6 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 SelectedAcText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedAcPresetIndex));
                 OnPropertyChanged(nameof(HasPendingAcChange));
-                OnPropertyChanged(nameof(HasAcSelectionSummary));
                 OnPropertyChanged(nameof(AcSelectionCaption));
             }
         }
@@ -126,7 +125,6 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 SelectedBatteryText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedBatteryPresetIndex));
                 OnPropertyChanged(nameof(HasPendingBatteryChange));
-                OnPropertyChanged(nameof(HasBatterySelectionSummary));
                 OnPropertyChanged(nameof(BatterySelectionCaption));
             }
         }
@@ -150,13 +148,9 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasPendingBatteryChange =>
         hasBatterySelectionChanged && currentBatteryPresetIndex != SelectedBatteryPresetIndex;
 
-    public bool HasAcSelectionSummary => HasPendingAcChange || currentAcPresetIndex is null;
+    public string AcSelectionCaption => GetSelectionCaption(HasPendingAcChange, currentAcPresetIndex);
 
-    public bool HasBatterySelectionSummary => HasPendingBatteryChange || currentBatteryPresetIndex is null;
-
-    public string AcSelectionCaption => HasPendingAcChange ? "変更後" : "前回選択";
-
-    public string BatterySelectionCaption => HasPendingBatteryChange ? "変更後" : "前回選択";
+    public string BatterySelectionCaption => GetSelectionCaption(HasPendingBatteryChange, currentBatteryPresetIndex);
 
     public int? CurrentAcPresetIndex => currentAcPresetIndex;
 
@@ -706,14 +700,15 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(HasPendingAcChange));
         OnPropertyChanged(nameof(HasPendingBatteryChange));
-        OnPropertyChanged(nameof(HasAcSelectionSummary));
-        OnPropertyChanged(nameof(HasBatterySelectionSummary));
         OnPropertyChanged(nameof(AcSelectionCaption));
         OnPropertyChanged(nameof(BatterySelectionCaption));
     }
 
     private static string RemoveCustomPresetSuffix(string value) =>
         value.Replace("（プリセット外）", string.Empty, StringComparison.Ordinal);
+
+    private static string GetSelectionCaption(bool hasPendingChange, int? currentPresetIndex) =>
+        hasPendingChange ? "変更後" : currentPresetIndex is null ? "前回選択" : "現在";
 
     private static string GetTargetLabel(PowerSettingTarget target) => target switch
     {

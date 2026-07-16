@@ -36,6 +36,8 @@ public sealed class MainWindowAccessibilityTests
                 Assert.True(window.AcPowerOnlyCheckBox.MinHeight >= 44);
                 Assert.True(window.AcApplyButton.MinHeight >= 44);
                 Assert.True(window.BatteryApplyButton.MinHeight >= 44);
+                Assert.Equal(44, window.AcActionRow.Height);
+                Assert.Equal(44, window.BatteryActionRow.Height);
             }
             finally
             {
