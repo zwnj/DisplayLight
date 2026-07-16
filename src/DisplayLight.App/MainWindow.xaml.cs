@@ -59,24 +59,17 @@ public partial class MainWindow : Window
                 : FlyoutMotionCalculator.OffsetTowardsTaskbar(
                     placement.Location,
                     placement.Edge,
-                    FlyoutMotionCalculator.OpeningDistanceDips,
-                    placement.DpiScale);
-            double startOpacity = wasVisible ? Opacity : FlyoutMotionCalculator.OpeningStartOpacity;
+                    FlyoutMotionCalculator.CalculateHiddenDistance(placement.Size, placement.Edge));
 
             FlyoutPositioner.Move(this, placement, shouldAnimate ? start : placement.Location);
             currentWindowLocation = shouldAnimate ? start : placement.Location;
-            Opacity = shouldAnimate ? startOpacity : 1;
+            Opacity = 1;
             if (!IsVisible)
             {
                 Show();
             }
 
             _ = Activate();
-            if (focusPrimaryAction)
-            {
-                _ = SleepToggleButton.Focus();
-            }
-
             isPositioning = false;
 
             if (shouldAnimate)
@@ -85,8 +78,7 @@ public partial class MainWindow : Window
                     placement,
                     start,
                     placement.Location,
-                    startOpacity,
-                    1,
+                    isOpening: true,
                     TimeSpan.FromMilliseconds(FlyoutMotionCalculator.OpeningDurationMilliseconds),
                     cancellation.Token);
             }
@@ -96,6 +88,11 @@ public partial class MainWindow : Window
                 FlyoutPositioner.Move(this, placement, placement.Location);
                 currentWindowLocation = placement.Location;
                 Opacity = 1;
+
+                if (focusPrimaryAction)
+                {
+                    _ = SleepToggleButton.Focus();
+                }
             }
         }
         catch (Win32Exception)
@@ -200,14 +197,12 @@ public partial class MainWindow : Window
                 NativePoint end = FlyoutMotionCalculator.OffsetTowardsTaskbar(
                     placement.Location,
                     placement.Edge,
-                    FlyoutMotionCalculator.ClosingDistanceDips,
-                    placement.DpiScale);
+                    FlyoutMotionCalculator.CalculateHiddenDistance(placement.Size, placement.Edge));
                 await AnimateWindowAsync(
                     placement,
                     start,
                     end,
-                    Opacity,
-                    0,
+                    isOpening: false,
                     TimeSpan.FromMilliseconds(FlyoutMotionCalculator.ClosingDurationMilliseconds),
                     cancellation.Token);
             }
@@ -240,8 +235,7 @@ public partial class MainWindow : Window
         FlyoutWindowPlacement placement,
         NativePoint start,
         NativePoint end,
-        double startOpacity,
-        double endOpacity,
+        bool isOpening,
         TimeSpan duration,
         CancellationToken cancellationToken)
     {
@@ -268,10 +262,11 @@ public partial class MainWindow : Window
             double progress = Math.Clamp(stopwatch.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
             try
             {
-                NativePoint location = FlyoutMotionCalculator.Interpolate(start, end, progress);
+                NativePoint location = isOpening
+                    ? FlyoutMotionCalculator.InterpolateOpening(start, end, progress)
+                    : FlyoutMotionCalculator.InterpolateClosing(start, end, progress);
                 FlyoutPositioner.Move(this, placement, location);
                 currentWindowLocation = location;
-                Opacity = FlyoutMotionCalculator.InterpolateOpacity(startOpacity, endOpacity, progress);
             }
             catch (Exception exception) when (exception is Win32Exception)
             {

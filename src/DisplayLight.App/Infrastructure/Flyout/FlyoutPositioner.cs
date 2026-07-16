@@ -60,7 +60,7 @@ internal static class FlyoutPositioner
         int height = Math.Max(1, (int)Math.Ceiling(logicalHeight * dpi / 96d));
         NativeSize size = new(width, height);
         FlyoutPlacement placement = FlyoutPlacementCalculator.Calculate(anchor, workArea, size);
-        return new FlyoutWindowPlacement(placement.Location, size, placement.Edge, dpi / 96d);
+        return new FlyoutWindowPlacement(placement.Location, size, placement.Edge);
     }
 
     internal static void Move(Window window, FlyoutWindowPlacement placement, NativePoint location)
@@ -217,5 +217,4 @@ internal static class FlyoutPositioner
 internal readonly record struct FlyoutWindowPlacement(
     NativePoint Location,
     NativeSize Size,
-    TaskbarEdge Edge,
-    double DpiScale);
+    TaskbarEdge Edge);

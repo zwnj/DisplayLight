@@ -17,41 +17,56 @@ public sealed class FlyoutMotionCalculatorTests
         NativePoint result = FlyoutMotionCalculator.OffsetTowardsTaskbar(
             new NativePoint(100, 200),
             edge,
-            FlyoutMotionCalculator.OpeningDistanceDips,
-            1.5);
+            48);
 
         Assert.Equal(new NativePoint(expectedX, expectedY), result);
     }
 
-    [Fact]
-    public void InterpolationUsesEaseOutAndFinishesAtTarget()
+    [Theory]
+    [InlineData(TaskbarEdge.Bottom, 508)]
+    [InlineData(TaskbarEdge.Top, 508)]
+    [InlineData(TaskbarEdge.Left, 380)]
+    [InlineData(TaskbarEdge.Right, 380)]
+    internal void HiddenDistanceCoversWindowExtentAndPlacementGap(
+        TaskbarEdge edge,
+        int expected)
     {
-        NativePoint halfway = FlyoutMotionCalculator.Interpolate(
+        int result = FlyoutMotionCalculator.CalculateHiddenDistance(
+            new NativeSize(372, 500),
+            edge);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void OpeningInterpolationUsesCubicEaseOutAndFinishesAtTarget()
+    {
+        NativePoint halfway = FlyoutMotionCalculator.InterpolateOpening(
             new NativePoint(0, 116),
             new NativePoint(0, 100),
             0.5);
-        NativePoint finished = FlyoutMotionCalculator.Interpolate(
+        NativePoint finished = FlyoutMotionCalculator.InterpolateOpening(
             new NativePoint(0, 116),
             new NativePoint(0, 100),
             1);
 
-        Assert.Equal(new NativePoint(0, 104), halfway);
+        Assert.Equal(new NativePoint(0, 102), halfway);
         Assert.Equal(new NativePoint(0, 100), finished);
     }
 
     [Fact]
-    public void OpeningOpacityBecomesFullyVisibleBeforeMotionFinishes()
+    public void ClosingInterpolationUsesCubicEaseInAndFinishesAtHiddenPosition()
     {
-        double early = FlyoutMotionCalculator.InterpolateOpacity(
-            FlyoutMotionCalculator.OpeningStartOpacity,
-            1,
-            0.275);
-        double halfway = FlyoutMotionCalculator.InterpolateOpacity(
-            FlyoutMotionCalculator.OpeningStartOpacity,
-            1,
-            0.55);
+        NativePoint halfway = FlyoutMotionCalculator.InterpolateClosing(
+            new NativePoint(0, 100),
+            new NativePoint(0, 116),
+            0.5);
+        NativePoint finished = FlyoutMotionCalculator.InterpolateClosing(
+            new NativePoint(0, 100),
+            new NativePoint(0, 116),
+            1);
 
-        Assert.Equal(0.86, early, precision: 2);
-        Assert.Equal(1, halfway);
+        Assert.Equal(new NativePoint(0, 102), halfway);
+        Assert.Equal(new NativePoint(0, 116), finished);
     }
 }

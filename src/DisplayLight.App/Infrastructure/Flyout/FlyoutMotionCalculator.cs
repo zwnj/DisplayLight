@@ -2,47 +2,63 @@ namespace DisplayLight.App.Infrastructure.Flyout;
 
 internal static class FlyoutMotionCalculator
 {
-    internal const double OpeningDistanceDips = 32;
-    internal const double ClosingDistanceDips = 16;
-    internal const double OpeningStartOpacity = 0.72;
-    internal const int OpeningDurationMilliseconds = 220;
-    internal const int ClosingDurationMilliseconds = 140;
+    internal const int OpeningDurationMilliseconds = 250;
+    internal const int ClosingDurationMilliseconds = 170;
 
     internal static NativePoint OffsetTowardsTaskbar(
         NativePoint location,
         TaskbarEdge edge,
-        double distanceDips,
-        double dpiScale)
+        int distancePixels)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(distanceDips);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dpiScale);
+        ArgumentOutOfRangeException.ThrowIfNegative(distancePixels);
 
-        int offset = (int)Math.Round(distanceDips * dpiScale, MidpointRounding.AwayFromZero);
         return edge switch
         {
-            TaskbarEdge.Bottom => location with { Y = location.Y + offset },
-            TaskbarEdge.Top => location with { Y = location.Y - offset },
-            TaskbarEdge.Left => location with { X = location.X - offset },
-            TaskbarEdge.Right => location with { X = location.X + offset },
+            TaskbarEdge.Bottom => location with { Y = location.Y + distancePixels },
+            TaskbarEdge.Top => location with { Y = location.Y - distancePixels },
+            TaskbarEdge.Left => location with { X = location.X - distancePixels },
+            TaskbarEdge.Right => location with { X = location.X + distancePixels },
             _ => location,
         };
     }
 
-    internal static NativePoint Interpolate(NativePoint start, NativePoint end, double progress)
+    internal static int CalculateHiddenDistance(
+        NativeSize size,
+        TaskbarEdge edge,
+        int placementGap = FlyoutPlacementCalculator.DefaultGap)
     {
-        double normalized = Math.Clamp(progress, 0, 1);
-        double eased = 1 - Math.Pow(1 - normalized, 2);
-        return new NativePoint(
-            (int)Math.Round(start.X + ((end.X - start.X) * eased)),
-            (int)Math.Round(start.Y + ((end.Y - start.Y) * eased)));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size.Width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size.Height);
+        ArgumentOutOfRangeException.ThrowIfNegative(placementGap);
+
+        int windowExtent = edge is TaskbarEdge.Top or TaskbarEdge.Bottom
+            ? size.Height
+            : size.Width;
+        return checked(windowExtent + placementGap);
     }
 
-    internal static double InterpolateOpacity(double start, double end, double progress)
+    internal static NativePoint InterpolateOpening(
+        NativePoint start,
+        NativePoint end,
+        double progress)
     {
         double normalized = Math.Clamp(progress, 0, 1);
-        double opacityProgress = end > start
-            ? Math.Min(1, normalized / 0.55)
-            : normalized;
-        return start + ((end - start) * opacityProgress);
+        double eased = 1 - Math.Pow(1 - normalized, 3);
+        return Interpolate(start, end, eased);
     }
+
+    internal static NativePoint InterpolateClosing(
+        NativePoint start,
+        NativePoint end,
+        double progress)
+    {
+        double normalized = Math.Clamp(progress, 0, 1);
+        double eased = Math.Pow(normalized, 3);
+        return Interpolate(start, end, eased);
+    }
+
+    private static NativePoint Interpolate(NativePoint start, NativePoint end, double easedProgress) =>
+        new(
+            (int)Math.Round(start.X + ((end.X - start.X) * easedProgress)),
+            (int)Math.Round(start.Y + ((end.Y - start.Y) * easedProgress)));
 }
