@@ -172,10 +172,6 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string BatteryExpansionAutomationName =>
         $"バッテリー時、現在{CurrentBatteryText}、{(IsBatteryExpanded ? "折りたたむ" : "展開")}";
 
-    public string AcChevronText => IsAcExpanded ? "⌃" : "⌄";
-
-    public string BatteryChevronText => IsBatteryExpanded ? "⌃" : "⌄";
-
     public string AcErrorMessage
     {
         get => acErrorMessage;
@@ -413,8 +409,6 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsBatteryExpanded));
         OnPropertyChanged(nameof(AcExpansionAutomationName));
         OnPropertyChanged(nameof(BatteryExpansionAutomationName));
-        OnPropertyChanged(nameof(AcChevronText));
-        OnPropertyChanged(nameof(BatteryChevronText));
     }
 
     private async Task ApplyTimeoutAsync(PowerSettingTarget target)

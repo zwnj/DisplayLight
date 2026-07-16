@@ -101,8 +101,6 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("電源：バッテリー駆動", viewModel.PowerSourceText);
         Assert.Equal("AC電源時、現在10分、展開", viewModel.AcExpansionAutomationName);
         Assert.Equal("バッテリー時、現在5分、折りたたむ", viewModel.BatteryExpansionAutomationName);
-        Assert.Equal("⌄", viewModel.AcChevronText);
-        Assert.Equal("⌃", viewModel.BatteryChevronText);
     }
 
     [Fact]

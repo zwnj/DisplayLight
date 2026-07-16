@@ -33,6 +33,9 @@ public sealed class MainWindowAccessibilityTests
                 Assert.Equal(ResizeMode.NoResize, window.ResizeMode);
                 Assert.False(window.ShowInTaskbar);
                 Assert.IsType<ToggleButton>(window.SleepToggleButton);
+                Assert.True(window.AcPowerOnlyCheckBox.MinHeight >= 44);
+                Assert.True(window.AcApplyButton.MinHeight >= 44);
+                Assert.True(window.BatteryApplyButton.MinHeight >= 44);
             }
             finally
             {
