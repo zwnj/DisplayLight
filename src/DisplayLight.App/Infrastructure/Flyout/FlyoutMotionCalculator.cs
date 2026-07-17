@@ -83,6 +83,18 @@ internal static class FlyoutMotionCalculator
             Math.Max(1, (int)Math.Round(start.Height + ((end.Height - start.Height) * smoothStep))));
     }
 
+    internal static double CalculateDesiredSurfaceHeight(
+        double contentHeight,
+        double verticalMargin,
+        double verticalBorderThickness)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(contentHeight);
+        ArgumentOutOfRangeException.ThrowIfNegative(verticalMargin);
+        ArgumentOutOfRangeException.ThrowIfNegative(verticalBorderThickness);
+
+        return contentHeight + verticalMargin + verticalBorderThickness;
+    }
+
     private static NativePoint Interpolate(NativePoint start, NativePoint end, double easedProgress) =>
         new(
             (int)Math.Round(start.X + ((end.X - start.X) * easedProgress)),

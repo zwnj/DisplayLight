@@ -98,4 +98,15 @@ public sealed class FlyoutMotionCalculatorTests
         Assert.Equal(new NativePoint(100, 200), location);
         Assert.Equal(new NativeSize(372, 400), size);
     }
+
+    [Fact]
+    public void DesiredSurfaceHeightCanShrinkWithInnerContent()
+    {
+        double expanded = FlyoutMotionCalculator.CalculateDesiredSurfaceHeight(600, 32, 2);
+        double collapsed = FlyoutMotionCalculator.CalculateDesiredSurfaceHeight(420, 32, 2);
+
+        Assert.Equal(634, expanded);
+        Assert.Equal(454, collapsed);
+        Assert.True(collapsed < expanded);
+    }
 }

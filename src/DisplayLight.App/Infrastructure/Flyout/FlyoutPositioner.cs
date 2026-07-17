@@ -13,7 +13,10 @@ internal static class FlyoutPositioner
     private const uint SetWindowPositionNoSize = 0x0001;
     private const uint SetWindowPositionNoZOrder = 0x0004;
 
-    internal static FlyoutWindowPlacement Calculate(Window window, NativeRectangle? iconBounds)
+    internal static FlyoutWindowPlacement Calculate(
+        Window window,
+        NativeRectangle? iconBounds,
+        double? desiredLogicalHeight = null)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -49,11 +52,20 @@ internal static class FlyoutPositioner
         NativeRectangle workArea = monitorInformation.WorkArea.ToRectangle();
         window.MaxHeight = Math.Max(320, (workArea.Height * 96d / dpi) - 24);
         double logicalWidth = double.IsNaN(window.Width) ? window.ActualWidth : window.Width;
-        double logicalHeight = window.ActualHeight;
-        if (window.Content is FrameworkElement content)
+        double logicalHeight;
+        if (desiredLogicalHeight is double requestedHeight)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requestedHeight);
+            logicalHeight = Math.Min(window.MaxHeight, requestedHeight);
+        }
+        else if (window.Content is FrameworkElement content)
         {
             content.Measure(new Size(logicalWidth, window.MaxHeight));
             logicalHeight = Math.Min(window.MaxHeight, content.DesiredSize.Height);
+        }
+        else
+        {
+            logicalHeight = window.ActualHeight;
         }
 
         int width = Math.Max(1, (int)Math.Ceiling(logicalWidth * dpi / 96d));

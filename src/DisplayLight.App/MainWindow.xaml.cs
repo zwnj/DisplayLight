@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -445,11 +446,19 @@ public partial class MainWindow : Window
         CancellationTokenSource cancellation = new();
         sizeMotionCancellation = cancellation;
         bool isResizeBackgroundActive = false;
+        ScrollBar? verticalScrollBar = null;
 
         try
         {
             UpdateLayout();
-            FlyoutWindowPlacement target = FlyoutPositioner.Calculate(this, lastIconBounds);
+            double desiredLogicalHeight = FlyoutMotionCalculator.CalculateDesiredSurfaceHeight(
+                FlyoutContentPanel.ActualHeight,
+                FlyoutContentPanel.Margin.Top + FlyoutContentPanel.Margin.Bottom,
+                FlyoutSurface.BorderThickness.Top + FlyoutSurface.BorderThickness.Bottom);
+            FlyoutWindowPlacement target = FlyoutPositioner.Calculate(
+                this,
+                lastIconBounds,
+                desiredLogicalHeight);
             NativePoint startLocation = currentWindowLocation ?? target.Location;
             NativeSize startSize = currentWindowSize ?? target.Size;
             if (startLocation == target.Location && startSize == target.Size)
@@ -459,6 +468,16 @@ public partial class MainWindow : Window
             }
 
             FlyoutContent.IsHitTestVisible = false;
+            FlyoutContent.ApplyTemplate();
+            verticalScrollBar = FlyoutContent.Template.FindName(
+                "PART_VerticalScrollBar",
+                FlyoutContent) as ScrollBar;
+            if (verticalScrollBar is not null)
+            {
+                verticalScrollBar.Opacity = 0;
+                verticalScrollBar.IsHitTestVisible = false;
+            }
+
             FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
             isResizeBackgroundActive = true;
             if (SystemParameters.ClientAreaAnimation)
@@ -492,6 +511,12 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (verticalScrollBar is not null)
+            {
+                verticalScrollBar.ClearValue(OpacityProperty);
+                verticalScrollBar.ClearValue(IsHitTestVisibleProperty);
+            }
+
             if (isResizeBackgroundActive)
             {
                 FlyoutPositioner.EndResizeSurfaceBackground(this);
