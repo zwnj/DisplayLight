@@ -21,6 +21,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             displayService,
             sleepService,
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             settingsStore);
 
@@ -44,6 +45,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
             sleepService,
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.Battery),
             settingsStore);
         await viewModel.InitializeAsync();
@@ -66,6 +68,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             displayService,
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             settingsStore);
         await viewModel.InitializeAsync();
@@ -90,6 +93,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.Battery),
             new FakeSettingsStore(new UserSettings()));
 
@@ -108,6 +112,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             new FakeSettingsStore(new UserSettings()));
         await viewModel.InitializeAsync();
@@ -130,6 +135,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             new FakeSettingsStore(new UserSettings()));
         await viewModel.InitializeAsync();
@@ -153,6 +159,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             displayService,
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             new FakeSettingsStore(new UserSettings()));
         await viewModel.InitializeAsync();
@@ -175,6 +182,7 @@ public sealed class MainWindowViewModelTests
         using MainWindowViewModel viewModel = new(
             new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
             new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
             new DelayedSettingsStore(loadCompletion.Task));
 
@@ -188,6 +196,70 @@ public sealed class MainWindowViewModelTests
 
         Assert.True(viewModel.ApplyAcCommand.CanExecute(parameter: null));
         Assert.True(viewModel.ToggleSleepPreventionCommand.CanExecute(parameter: null));
+    }
+
+    [Fact]
+    public async Task DisplayOffRunsOnlyAfterThreeCountdownTicksAndHideRequest()
+    {
+        FakeDisplayOffService displayOffService = new();
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeSleepPreventionService(),
+            displayOffService,
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+        int hideRequestCount = 0;
+        viewModel.DisplayOffRequested += (_, _) => hideRequestCount++;
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ToggleDisplayOffCountdownCommand);
+
+        await command.ExecuteAsync();
+
+        Assert.True(viewModel.IsDisplayOffCountdownActive);
+        Assert.Equal(3, viewModel.DisplayOffRemainingSeconds);
+        Assert.Equal("3秒後にオフ　キャンセル", viewModel.DisplayOffButtonText);
+
+        viewModel.AdvanceDisplayOffCountdown();
+        viewModel.AdvanceDisplayOffCountdown();
+
+        Assert.Equal(1, viewModel.DisplayOffRemainingSeconds);
+        Assert.Equal(0, hideRequestCount);
+        Assert.Equal(0, displayOffService.TurnOffCount);
+
+        viewModel.AdvanceDisplayOffCountdown();
+
+        Assert.False(viewModel.IsDisplayOffCountdownActive);
+        Assert.Equal(1, hideRequestCount);
+        Assert.Equal(0, displayOffService.TurnOffCount);
+
+        viewModel.TurnOffDisplay();
+
+        Assert.Equal(1, displayOffService.TurnOffCount);
+    }
+
+    [Fact]
+    public async Task DisplayOffCountdownCanBeCancelledBeforeItCompletes()
+    {
+        FakeDisplayOffService displayOffService = new();
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeSleepPreventionService(),
+            displayOffService,
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+        int hideRequestCount = 0;
+        viewModel.DisplayOffRequested += (_, _) => hideRequestCount++;
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ToggleDisplayOffCountdownCommand);
+
+        await command.ExecuteAsync();
+        await command.ExecuteAsync();
+        viewModel.AdvanceDisplayOffCountdown();
+
+        Assert.False(viewModel.IsDisplayOffCountdownActive);
+        Assert.Equal("ディスプレイをオフ", viewModel.DisplayOffButtonText);
+        Assert.Equal(0, hideRequestCount);
+        Assert.Equal(0, displayOffService.TurnOffCount);
     }
 
     private sealed class FakeDisplayTimeoutService(DisplayTimeoutValues values) : IDisplayTimeoutService
@@ -236,6 +308,13 @@ public sealed class MainWindowViewModelTests
         public void Dispose()
         {
         }
+    }
+
+    private sealed class FakeDisplayOffService : IDisplayOffService
+    {
+        public int TurnOffCount { get; private set; }
+
+        public void TurnOff() => TurnOffCount++;
     }
 
     private sealed class FakePowerSourceProvider(PowerSource source) : IPowerSourceProvider

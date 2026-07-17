@@ -604,6 +604,28 @@
                     </StackPanel>
                 </Border>
 
+                <Button x:Name="DisplayOffButton"
+                        Content="{Binding DisplayOffButtonText}"
+                        Command="{Binding ToggleDisplayOffCountdownCommand}"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        AutomationProperties.Name="{Binding DisplayOffAutomationName}"
+                        AutomationProperties.LiveSetting="Assertive">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource QuietButtonStyle}">
+                            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsDisplayOffCountdownActive}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
                 <Border Margin="0,10,0,0"
                         Padding="10,8"
                         CornerRadius="9"

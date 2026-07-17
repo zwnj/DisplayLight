@@ -180,7 +180,11 @@ public partial class MainWindow : Window
         base.OnClosing(e);
     }
 
-    private void HideFlyout() => _ = HideFlyoutAsync();
+    private void HideFlyout()
+    {
+        observedViewModel?.CancelDisplayOffCountdown();
+        _ = HideFlyoutAsync();
+    }
 
     private async Task HideFlyoutAsync()
     {
@@ -614,12 +618,28 @@ public partial class MainWindow : Window
         if (observedViewModel is not null)
         {
             observedViewModel.PropertyChanged -= HandleViewModelPropertyChanged;
+            observedViewModel.DisplayOffRequested -= HandleDisplayOffRequested;
         }
 
         observedViewModel = e.NewValue as MainWindowViewModel;
         if (observedViewModel is not null)
         {
             observedViewModel.PropertyChanged += HandleViewModelPropertyChanged;
+            observedViewModel.DisplayOffRequested += HandleDisplayOffRequested;
+        }
+    }
+
+    private async void HandleDisplayOffRequested(object? sender, EventArgs e)
+    {
+        if (sender is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        await HideFlyoutAsync();
+        if (!IsVisible)
+        {
+            viewModel.TurnOffDisplay();
         }
     }
 
@@ -671,6 +691,7 @@ public partial class MainWindow : Window
 
     private async void Window_Deactivated(object sender, EventArgs e)
     {
+        observedViewModel?.CancelDisplayOffCountdown();
         await Task.Delay(120);
         if (!isAuxiliaryMenuOpen && !IsActive && IsVisible)
         {

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Interop;
 using DisplayLight.App.Infrastructure.Settings;
 using DisplayLight.App.Infrastructure.SingleInstance;
 using DisplayLight.App.Infrastructure.Tray;
@@ -39,6 +40,10 @@ public partial class App : Application, IDisposable
             IPowerSchemeNativeApi powerSchemeApi = new PowerSchemeNativeApi();
             IDisplayTimeoutService displayTimeoutService = new WindowsDisplayTimeoutService(powerSchemeApi);
             sleepPreventionService = new WindowsSleepPreventionService();
+            IDisplayOffService displayOffService = new WindowsDisplayOffService(() =>
+                mainWindow is null
+                    ? nint.Zero
+                    : new WindowInteropHelper(mainWindow).EnsureHandle());
             IPowerSourceProvider powerSourceProvider = new WindowsPowerSourceProvider();
             IUserSettingsStore settingsStore = new JsonUserSettingsStore();
 
@@ -47,6 +52,7 @@ public partial class App : Application, IDisposable
             viewModel = new MainWindowViewModel(
                 displayTimeoutService,
                 sleepPreventionService,
+                displayOffService,
                 powerSourceProvider,
                 settingsStore);
             mainWindow = new MainWindow

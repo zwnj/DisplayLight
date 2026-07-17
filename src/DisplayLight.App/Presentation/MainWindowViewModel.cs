@@ -11,15 +11,19 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly IDisplayTimeoutService displayTimeoutService;
     private readonly ISleepPreventionService sleepPreventionService;
+    private readonly IDisplayOffService displayOffService;
     private readonly IPowerSourceProvider powerSourceProvider;
     private readonly IUserSettingsStore settingsStore;
     private readonly DispatcherTimer powerSourceTimer;
     private readonly DispatcherTimer statusClearTimer;
+    private readonly DispatcherTimer displayOffCountdownTimer;
+    private readonly DisplayOffCountdown displayOffCountdown = new();
     private readonly AsyncRelayCommand applyAcCommand;
     private readonly AsyncRelayCommand applyBatteryCommand;
     private readonly AsyncRelayCommand refreshCommand;
     private readonly AsyncRelayCommand toggleSleepPreventionCommand;
     private readonly AsyncRelayCommand updateAcPowerOnlyCommand;
+    private readonly AsyncRelayCommand toggleDisplayOffCountdownCommand;
 
     private UserSettings settings = new();
     private double selectedAcSliderValue = 2;
@@ -52,11 +56,13 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public MainWindowViewModel(
         IDisplayTimeoutService displayTimeoutService,
         ISleepPreventionService sleepPreventionService,
+        IDisplayOffService displayOffService,
         IPowerSourceProvider powerSourceProvider,
         IUserSettingsStore settingsStore)
     {
         this.displayTimeoutService = displayTimeoutService;
         this.sleepPreventionService = sleepPreventionService;
+        this.displayOffService = displayOffService;
         this.powerSourceProvider = powerSourceProvider;
         this.settingsStore = settingsStore;
 
@@ -65,6 +71,9 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         refreshCommand = new(RefreshAsync, () => !IsBusy);
         toggleSleepPreventionCommand = new(ToggleSleepPreventionAsync, () => !IsBusy);
         updateAcPowerOnlyCommand = new(UpdateAcPowerOnlyAsync, () => !IsBusy);
+        toggleDisplayOffCountdownCommand = new(
+            ToggleDisplayOffCountdownAsync,
+            () => displayOffCountdown.IsActive || !IsBusy);
 
         powerSourceTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -76,7 +85,14 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             Interval = TimeSpan.FromSeconds(4),
         };
         statusClearTimer.Tick += HandleStatusClearTimerTick;
+        displayOffCountdownTimer = new DispatcherTimer(DispatcherPriority.Normal)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        displayOffCountdownTimer.Tick += HandleDisplayOffCountdownTimerTick;
     }
+
+    public event EventHandler? DisplayOffRequested;
 
     public ICommand ApplyAcCommand => applyAcCommand;
 
@@ -87,6 +103,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public ICommand ToggleSleepPreventionCommand => toggleSleepPreventionCommand;
 
     public ICommand UpdateAcPowerOnlyCommand => updateAcPowerOnlyCommand;
+
+    public ICommand ToggleDisplayOffCountdownCommand => toggleDisplayOffCountdownCommand;
 
     public double SelectedAcSliderValue
     {
@@ -318,6 +336,18 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string SleepPreventionAutomationName =>
         $"スリープ防止、{SleepPreventionStatusText}。押すと{(IsSleepPreventionRequested ? "解除" : "開始")}します";
 
+    public bool IsDisplayOffCountdownActive => displayOffCountdown.IsActive;
+
+    public int DisplayOffRemainingSeconds => displayOffCountdown.RemainingSeconds;
+
+    public string DisplayOffButtonText => IsDisplayOffCountdownActive
+        ? $"{DisplayOffRemainingSeconds}秒後にオフ　キャンセル"
+        : "ディスプレイをオフ";
+
+    public string DisplayOffAutomationName => IsDisplayOffCountdownActive
+        ? $"ディスプレイを{DisplayOffRemainingSeconds}秒後にオフ。押すとキャンセルします"
+        : "ディスプレイをオフ。3秒のカウントダウンを開始します";
+
     public bool IsBusy
     {
         get => isBusy;
@@ -389,6 +419,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         powerSourceTimer.Tick -= HandlePowerSourceTimerTick;
         statusClearTimer.Stop();
         statusClearTimer.Tick -= HandleStatusClearTimerTick;
+        displayOffCountdownTimer.Stop();
+        displayOffCountdownTimer.Tick -= HandleDisplayOffCountdownTimerTick;
     }
 
     internal void Expand(PowerSettingTarget target)
@@ -447,6 +479,65 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         IsSleepPreventionRequested = !IsSleepPreventionRequested;
         ApplySleepPreventionDecision();
         return Task.CompletedTask;
+    }
+
+    private Task ToggleDisplayOffCountdownAsync()
+    {
+        if (displayOffCountdown.IsActive)
+        {
+            CancelDisplayOffCountdown();
+        }
+        else
+        {
+            displayOffCountdown.Start();
+            displayOffCountdownTimer.Start();
+            NotifyDisplayOffCountdownChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    internal void CancelDisplayOffCountdown()
+    {
+        if (!displayOffCountdown.IsActive)
+        {
+            return;
+        }
+
+        displayOffCountdownTimer.Stop();
+        displayOffCountdown.Cancel();
+        NotifyDisplayOffCountdownChanged();
+    }
+
+    internal void AdvanceDisplayOffCountdown()
+    {
+        if (!displayOffCountdown.IsActive)
+        {
+            return;
+        }
+
+        bool shouldTurnOff = displayOffCountdown.Tick();
+        NotifyDisplayOffCountdownChanged();
+        if (!shouldTurnOff)
+        {
+            return;
+        }
+
+        displayOffCountdownTimer.Stop();
+        DisplayOffRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    internal void TurnOffDisplay()
+    {
+        try
+        {
+            displayOffService.TurnOff();
+            HasError = false;
+        }
+        catch (Exception exception)
+        {
+            SetError(exception);
+        }
     }
 
     private async Task UpdateAcPowerOnlyAsync()
@@ -590,6 +681,18 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private void HandlePowerSourceTimerTick(object? sender, EventArgs e) =>
         RefreshPowerSource(updateStatusMessage: false);
 
+    private void HandleDisplayOffCountdownTimerTick(object? sender, EventArgs e) =>
+        AdvanceDisplayOffCountdown();
+
+    private void NotifyDisplayOffCountdownChanged()
+    {
+        OnPropertyChanged(nameof(IsDisplayOffCountdownActive));
+        OnPropertyChanged(nameof(DisplayOffRemainingSeconds));
+        OnPropertyChanged(nameof(DisplayOffButtonText));
+        OnPropertyChanged(nameof(DisplayOffAutomationName));
+        toggleDisplayOffCountdownCommand.NotifyCanExecuteChanged();
+    }
+
     private void SetError(Exception exception)
     {
         HasError = true;
@@ -648,6 +751,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         refreshCommand.NotifyCanExecuteChanged();
         toggleSleepPreventionCommand.NotifyCanExecuteChanged();
         updateAcPowerOnlyCommand.NotifyCanExecuteChanged();
+        toggleDisplayOffCountdownCommand.NotifyCanExecuteChanged();
     }
 
     private static double NormalizeSliderValue(double value) =>
