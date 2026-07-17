@@ -349,7 +349,8 @@
             BorderThickness="1"
             CornerRadius="8"
             Background="{DynamicResource SurfaceBrush}">
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
+        <ScrollViewer x:Name="FlyoutContent"
+                      VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
             <StackPanel Margin="20,14,20,18">

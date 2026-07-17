@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DisplayLight.App.Infrastructure.Flyout;
 using DisplayLight.App.Presentation;
@@ -54,6 +55,12 @@ public partial class MainWindow : Window
             currentPlacement = placement;
 
             bool shouldAnimate = SystemParameters.ClientAreaAnimation;
+            if (!wasVisible)
+            {
+                FlyoutContent.Opacity = shouldAnimate ? 0 : 1;
+                FlyoutContent.IsHitTestVisible = !shouldAnimate;
+            }
+
             NativePoint start = wasVisible && currentWindowLocation is NativePoint visibleLocation
                 ? visibleLocation
                 : FlyoutMotionCalculator.OffsetTowardsTaskbar(
@@ -89,9 +96,20 @@ public partial class MainWindow : Window
                 currentWindowLocation = placement.Location;
                 Opacity = 1;
 
-                if (focusPrimaryAction)
+                if (shouldAnimate && FlyoutContent.Opacity < 1)
                 {
-                    _ = SleepToggleButton.Focus();
+                    await AnimateContentInAsync(
+                        TimeSpan.FromMilliseconds(FlyoutMotionCalculator.ContentRevealDurationMilliseconds),
+                        cancellation.Token);
+                }
+
+                if (!cancellation.IsCancellationRequested)
+                {
+                    FlyoutContent.IsHitTestVisible = true;
+                    if (focusPrimaryAction)
+                    {
+                        _ = SleepToggleButton.Focus();
+                    }
                 }
             }
         }
@@ -104,6 +122,8 @@ public partial class MainWindow : Window
 
             PositionFallback();
             Opacity = 1;
+            FlyoutContent.Opacity = 1;
+            FlyoutContent.IsHitTestVisible = true;
         }
         finally
         {
@@ -186,6 +206,7 @@ public partial class MainWindow : Window
 
         isClosing = true;
         CancelMotion();
+        FlyoutContent.IsHitTestVisible = false;
         CancellationTokenSource cancellation = new();
         motionCancellation = cancellation;
 
@@ -241,18 +262,24 @@ public partial class MainWindow : Window
     {
         TaskCompletionSource completion = new();
         Stopwatch stopwatch = Stopwatch.StartNew();
-        DispatcherTimer timer = new(DispatcherPriority.Render, Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(16),
-        };
+        TimeSpan lastRenderingTime = TimeSpan.MinValue;
 
         activeMotionCount++;
-        timer.Tick += HandleTick;
-        timer.Start();
+        CompositionTarget.Rendering += HandleRendering;
         return completion.Task;
 
-        void HandleTick(object? sender, EventArgs e)
+        void HandleRendering(object? sender, EventArgs e)
         {
+            if (e is RenderingEventArgs renderingArgs)
+            {
+                if (renderingArgs.RenderingTime == lastRenderingTime)
+                {
+                    return;
+                }
+
+                lastRenderingTime = renderingArgs.RenderingTime;
+            }
+
             if (cancellationToken.IsCancellationRequested)
             {
                 Complete();
@@ -282,8 +309,7 @@ public partial class MainWindow : Window
 
         void Complete(Exception? exception = null)
         {
-            timer.Stop();
-            timer.Tick -= HandleTick;
+            CompositionTarget.Rendering -= HandleRendering;
             stopwatch.Stop();
             activeMotionCount--;
             if (exception is null)
@@ -294,6 +320,53 @@ public partial class MainWindow : Window
             {
                 completion.TrySetException(exception);
             }
+        }
+    }
+
+    private Task AnimateContentInAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        TaskCompletionSource completion = new();
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        TimeSpan lastRenderingTime = TimeSpan.MinValue;
+        double startOpacity = FlyoutContent.Opacity;
+
+        activeMotionCount++;
+        CompositionTarget.Rendering += HandleRendering;
+        return completion.Task;
+
+        void HandleRendering(object? sender, EventArgs e)
+        {
+            if (e is RenderingEventArgs renderingArgs)
+            {
+                if (renderingArgs.RenderingTime == lastRenderingTime)
+                {
+                    return;
+                }
+
+                lastRenderingTime = renderingArgs.RenderingTime;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Complete();
+                return;
+            }
+
+            double progress = Math.Clamp(stopwatch.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+            FlyoutContent.Opacity = FlyoutMotionCalculator.InterpolateContentOpacity(startOpacity, progress);
+            if (progress >= 1)
+            {
+                FlyoutContent.Opacity = 1;
+                Complete();
+            }
+        }
+
+        void Complete()
+        {
+            CompositionTarget.Rendering -= HandleRendering;
+            stopwatch.Stop();
+            activeMotionCount--;
+            completion.TrySetResult();
         }
     }
 
@@ -312,6 +385,8 @@ public partial class MainWindow : Window
     {
         Hide();
         Opacity = 1;
+        FlyoutContent.Opacity = 1;
+        FlyoutContent.IsHitTestVisible = true;
         currentWindowLocation = currentPlacement?.Location;
         FlyoutHidden?.Invoke(this, EventArgs.Empty);
     }

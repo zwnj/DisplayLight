@@ -69,4 +69,17 @@ public sealed class FlyoutMotionCalculatorTests
         Assert.Equal(new NativePoint(0, 102), halfway);
         Assert.Equal(new NativePoint(0, 116), finished);
     }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(1, 1)]
+    internal void ContentOpacityUsesSmoothStepAfterSurfaceMotion(
+        double progress,
+        double expected)
+    {
+        double result = FlyoutMotionCalculator.InterpolateContentOpacity(0, progress);
+
+        Assert.Equal(expected, result, precision: 3);
+    }
 }
