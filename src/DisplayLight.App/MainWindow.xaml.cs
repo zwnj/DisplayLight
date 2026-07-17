@@ -647,7 +647,8 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName is nameof(MainWindowViewModel.IsAcExpanded)
             or nameof(MainWindowViewModel.IsBatteryExpanded)
-            or nameof(MainWindowViewModel.HasStatusMessage)
+            or nameof(MainWindowViewModel.HasGeneralError)
+            or nameof(MainWindowViewModel.HasDisplayOffError)
             or nameof(MainWindowViewModel.HasAcError)
             or nameof(MainWindowViewModel.HasBatteryError)
             or nameof(MainWindowViewModel.HasSleepError))

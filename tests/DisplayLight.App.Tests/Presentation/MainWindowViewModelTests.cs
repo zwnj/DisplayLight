@@ -170,6 +170,7 @@ public sealed class MainWindowViewModelTests
 
         Assert.True(viewModel.HasAcError);
         Assert.False(viewModel.HasBatteryError);
+        Assert.False(viewModel.HasGeneralError);
         Assert.Contains("Windowsエラー 5", viewModel.AcErrorMessage, StringComparison.Ordinal);
         Assert.True(viewModel.HasPendingAcChange);
     }
@@ -262,6 +263,50 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(0, displayOffService.TurnOffCount);
     }
 
+    [Fact]
+    public async Task DisplayOffFailureAppearsNextToDisplayOffAction()
+    {
+        FakeDisplayOffService displayOffService = new()
+        {
+            TurnOffException = new InvalidOperationException("消灯できませんでした。"),
+        };
+        using MainWindowViewModel viewModel = new(
+            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeSleepPreventionService(),
+            displayOffService,
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+
+        viewModel.TurnOffDisplay();
+
+        Assert.True(viewModel.HasDisplayOffError);
+        Assert.Equal("消灯できませんでした。", viewModel.DisplayOffErrorMessage);
+        Assert.False(viewModel.HasGeneralError);
+    }
+
+    [Fact]
+    public async Task RefreshFailureAppearsAsGeneralError()
+    {
+        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(600, 600))
+        {
+            ReadException = new InvalidOperationException("電源設定を読み込めませんでした。"),
+        };
+        using MainWindowViewModel viewModel = new(
+            displayService,
+            new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+
+        await viewModel.InitializeAsync();
+
+        Assert.True(viewModel.HasGeneralError);
+        Assert.Equal("電源設定を読み込めませんでした。", viewModel.GeneralErrorMessage);
+        Assert.False(viewModel.HasAcError);
+        Assert.False(viewModel.HasBatteryError);
+    }
+
     private sealed class FakeDisplayTimeoutService(DisplayTimeoutValues values) : IDisplayTimeoutService
     {
         private DisplayTimeoutValues values = values;
@@ -272,8 +317,17 @@ public sealed class MainWindowViewModelTests
 
         public Exception? SetException { get; init; }
 
-        public Task<DisplayTimeoutValues> ReadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(values);
+        public Exception? ReadException { get; init; }
+
+        public Task<DisplayTimeoutValues> ReadAsync(CancellationToken cancellationToken = default)
+        {
+            if (ReadException is not null)
+            {
+                throw ReadException;
+            }
+
+            return Task.FromResult(values);
+        }
 
         public Task<DisplayTimeoutValues> SetAsync(
             PowerSettingTarget target,
@@ -314,7 +368,17 @@ public sealed class MainWindowViewModelTests
     {
         public int TurnOffCount { get; private set; }
 
-        public void TurnOff() => TurnOffCount++;
+        public Exception? TurnOffException { get; init; }
+
+        public void TurnOff()
+        {
+            if (TurnOffException is not null)
+            {
+                throw TurnOffException;
+            }
+
+            TurnOffCount++;
+        }
     }
 
     private sealed class FakePowerSourceProvider(PowerSource source) : IPowerSourceProvider
