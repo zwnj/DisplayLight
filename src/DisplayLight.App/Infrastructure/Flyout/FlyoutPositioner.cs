@@ -143,11 +143,25 @@ internal static class FlyoutPositioner
         int roundedCornerPreference = 2;
         _ = NativeMethods.SetDwmWindowAttribute(handle, 33, ref roundedCornerPreference, sizeof(int));
 
+        // 独自の位置アニメーションとDWM既定の表示遷移が重なると、背景面だけが
+        // 別のウィンドウのように先行表示されるため、既定遷移は使用しない。
+        int transitionsForcedDisabled = 1;
+        _ = NativeMethods.SetDwmWindowAttribute(handle, 3, ref transitionsForcedDisabled, sizeof(int));
+
         int backdropType = SystemParameters.HighContrast ? 1 : 3;
         _ = NativeMethods.SetDwmWindowAttribute(handle, 38, ref backdropType, sizeof(int));
 
         WindowMargins margins = new(-1);
         _ = NativeMethods.ExtendFrameIntoClientArea(handle, ref margins);
+    }
+
+    internal static bool TrySetCloaked(Window window, bool cloaked)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        nint handle = new WindowInteropHelper(window).EnsureHandle();
+        int value = cloaked ? 1 : 0;
+        return NativeMethods.SetDwmWindowAttribute(handle, 13, ref value, sizeof(int)) >= 0;
     }
 
     internal static void ApplyTheme(Window window, bool useLightTheme)

@@ -84,10 +84,9 @@ public sealed class FlyoutMotionCalculatorTests
     }
 
     [Fact]
-    public void OpeningKeepsContentVisibleBehindMovingSurface()
+    public void OpeningKeepsContentHiddenUntilSurfaceMotionCompletes()
     {
-        Assert.InRange(FlyoutMotionCalculator.OpeningContentOpacity, 0.5, 0.9);
-        Assert.True(FlyoutMotionCalculator.OpeningContentOpacity < 1);
+        Assert.Equal(0, FlyoutMotionCalculator.OpeningContentOpacity);
     }
 
     [Fact]

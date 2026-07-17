@@ -52,6 +52,7 @@ public partial class MainWindow : Window
         isClosing = false;
         CancellationTokenSource cancellation = new();
         motionCancellation = cancellation;
+        bool openingCloaked = false;
 
         try
         {
@@ -64,13 +65,10 @@ public partial class MainWindow : Window
             bool shouldAnimate = SystemParameters.ClientAreaAnimation;
             if (!wasVisible)
             {
-                // 内容を完全に消すと外側の灰色面だけが移動し、別ウィンドウのように見える。
-                // 初回描画はウィンドウ全体を隠して準備し、スライド中の内容は薄く残す。
-                FlyoutContent.Opacity = shouldAnimate
-                    ? FlyoutMotionCalculator.OpeningContentOpacity
-                    : 1;
+                FlyoutContent.Opacity = shouldAnimate ? FlyoutMotionCalculator.OpeningContentOpacity : 1;
                 FlyoutContent.IsHitTestVisible = !shouldAnimate;
-                Opacity = shouldAnimate ? 0 : 1;
+                openingCloaked = shouldAnimate && FlyoutPositioner.TrySetCloaked(this, true);
+                Opacity = shouldAnimate && !openingCloaked ? 0 : 1;
             }
 
             NativePoint start = wasVisible && currentWindowLocation is NativePoint visibleLocation
@@ -97,6 +95,11 @@ public partial class MainWindow : Window
                 }
 
                 Opacity = 1;
+                if (openingCloaked)
+                {
+                    _ = FlyoutPositioner.TrySetCloaked(this, false);
+                    openingCloaked = false;
+                }
             }
 
             _ = Activate();
@@ -139,6 +142,12 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception)
         {
+            if (openingCloaked)
+            {
+                _ = FlyoutPositioner.TrySetCloaked(this, false);
+                openingCloaked = false;
+            }
+
             if (!IsVisible)
             {
                 Show();
@@ -624,6 +633,7 @@ public partial class MainWindow : Window
     private void CompleteHide()
     {
         Hide();
+        _ = FlyoutPositioner.TrySetCloaked(this, false);
         Opacity = 1;
         FlyoutContent.Opacity = 1;
         FlyoutContent.IsHitTestVisible = true;
