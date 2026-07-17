@@ -148,13 +148,19 @@ public partial class MainWindow : Window
 
     internal void ToggleAt(NativeRectangle? iconBounds, bool focusPrimaryAction)
     {
-        if (IsVisible && !isClosing)
+        switch (FlyoutToggleActionCalculator.Calculate(IsVisible, isClosing))
         {
-            HideFlyout();
-            return;
+            case FlyoutToggleAction.Hide:
+                HideFlyout();
+                break;
+            case FlyoutToggleAction.Show:
+                ShowAt(iconBounds, focusPrimaryAction);
+                break;
+            case FlyoutToggleAction.Ignore:
+                // Deactivated が先に閉じ始めた後、同じクリックの通知領域イベントが届く場合がある。
+                // ここで再表示すると一回のクリックが閉じる操作と開く操作の両方になる。
+                break;
         }
-
-        ShowAt(iconBounds, focusPrimaryAction);
     }
 
     public void AllowClose() => isCloseAllowed = true;
