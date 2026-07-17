@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private bool isContentResizeQueued;
     private int activeMotionCount;
     private bool isPositioning;
+    private bool isOpeningSurfaceBackgroundActive;
     private bool useLightTheme = true;
     private CancellationTokenSource? motionCancellation;
     private CancellationTokenSource? sizeMotionCancellation;
@@ -67,6 +68,11 @@ public partial class MainWindow : Window
             {
                 FlyoutContent.Opacity = shouldAnimate ? FlyoutMotionCalculator.OpeningContentOpacity : 1;
                 FlyoutContent.IsHitTestVisible = !shouldAnimate;
+                if (shouldAnimate)
+                {
+                    BeginOpeningSurfaceBackground();
+                }
+
                 openingCloaked = shouldAnimate && FlyoutPositioner.TrySetCloaked(this, true);
                 Opacity = shouldAnimate && !openingCloaked ? 0 : 1;
             }
@@ -132,6 +138,7 @@ public partial class MainWindow : Window
 
                 if (!cancellation.IsCancellationRequested)
                 {
+                    EndOpeningSurfaceBackground();
                     FlyoutContent.IsHitTestVisible = true;
                     if (focusPrimaryAction)
                     {
@@ -142,6 +149,7 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception)
         {
+            EndOpeningSurfaceBackground();
             if (openingCloaked)
             {
                 _ = FlyoutPositioner.TrySetCloaked(this, false);
@@ -612,6 +620,34 @@ public partial class MainWindow : Window
         {
             await WaitForNextRenderAsync();
         }
+
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            // Rendering は描画直前に発火する。より低い優先度へ一度戻してWPFの
+            // サーフェス更新を完了させ、DWMへのPresentまで待ってからクロークを外す。
+            await Dispatcher.InvokeAsync(
+                static () => { },
+                DispatcherPriority.ContextIdle,
+                CancellationToken.None);
+            _ = FlyoutPositioner.TryFlushComposition();
+        }
+    }
+
+    private void BeginOpeningSurfaceBackground()
+    {
+        FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
+        isOpeningSurfaceBackgroundActive = true;
+    }
+
+    private void EndOpeningSurfaceBackground()
+    {
+        if (!isOpeningSurfaceBackgroundActive)
+        {
+            return;
+        }
+
+        FlyoutPositioner.EndResizeSurfaceBackground(this);
+        isOpeningSurfaceBackgroundActive = false;
     }
 
     private void CancelMotion()
@@ -633,6 +669,7 @@ public partial class MainWindow : Window
     private void CompleteHide()
     {
         Hide();
+        EndOpeningSurfaceBackground();
         _ = FlyoutPositioner.TrySetCloaked(this, false);
         Opacity = 1;
         FlyoutContent.Opacity = 1;

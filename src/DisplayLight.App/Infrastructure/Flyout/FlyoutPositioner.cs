@@ -164,6 +164,8 @@ internal static class FlyoutPositioner
         return NativeMethods.SetDwmWindowAttribute(handle, 13, ref value, sizeof(int)) >= 0;
     }
 
+    internal static bool TryFlushComposition() => NativeMethods.FlushComposition() >= 0;
+
     internal static void ApplyTheme(Window window, bool useLightTheme)
     {
         nint handle = new WindowInteropHelper(window).EnsureHandle();
@@ -215,6 +217,9 @@ internal static class FlyoutPositioner
 
         [DllImport("dwmapi.dll", EntryPoint = "DwmExtendFrameIntoClientArea")]
         internal static extern int ExtendFrameIntoClientArea(nint window, ref WindowMargins margins);
+
+        [DllImport("dwmapi.dll", EntryPoint = "DwmFlush")]
+        internal static extern int FlushComposition();
     }
 
     [StructLayout(LayoutKind.Sequential)]
