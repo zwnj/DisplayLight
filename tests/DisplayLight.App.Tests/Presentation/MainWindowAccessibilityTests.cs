@@ -39,6 +39,7 @@ public sealed class MainWindowAccessibilityTests
                 Assert.Equal(44, window.AcActionRow.Height);
                 Assert.Equal(44, window.BatteryActionRow.Height);
                 Assert.Equal(new CornerRadius(8), window.FlyoutSurface.CornerRadius);
+                Assert.Equal(ScrollBarVisibility.Hidden, window.FlyoutContent.VerticalScrollBarVisibility);
             }
             finally
             {

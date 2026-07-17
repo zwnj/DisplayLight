@@ -350,7 +350,7 @@
             CornerRadius="8"
             Background="{DynamicResource SurfaceBrush}">
         <ScrollViewer x:Name="FlyoutContent"
-                      VerticalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Hidden"
                       HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
             <StackPanel x:Name="FlyoutContentPanel"

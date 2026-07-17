@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -28,11 +27,13 @@ public partial class MainWindow : Window
     private NativePoint? currentWindowLocation;
     private NativeSize? currentWindowSize;
     private NativeRectangle? lastIconBounds;
+    private MainWindowViewModel? observedViewModel;
 
     public MainWindow()
     {
         InitializeComponent();
         SourceInitialized += HandleSourceInitialized;
+        DataContextChanged += HandleDataContextChanged;
         FlyoutContentPanel.SizeChanged += HandleContentSizeChanged;
     }
 
@@ -446,15 +447,11 @@ public partial class MainWindow : Window
         CancellationTokenSource cancellation = new();
         sizeMotionCancellation = cancellation;
         bool isResizeBackgroundActive = false;
-        ScrollBar? verticalScrollBar = null;
 
         try
         {
             UpdateLayout();
-            double desiredLogicalHeight = FlyoutMotionCalculator.CalculateDesiredSurfaceHeight(
-                FlyoutContentPanel.ActualHeight,
-                FlyoutContentPanel.Margin.Top + FlyoutContentPanel.Margin.Bottom,
-                FlyoutSurface.BorderThickness.Top + FlyoutSurface.BorderThickness.Bottom);
+            double desiredLogicalHeight = MeasureDesiredSurfaceHeight();
             FlyoutWindowPlacement target = FlyoutPositioner.Calculate(
                 this,
                 lastIconBounds,
@@ -468,16 +465,6 @@ public partial class MainWindow : Window
             }
 
             FlyoutContent.IsHitTestVisible = false;
-            FlyoutContent.ApplyTemplate();
-            verticalScrollBar = FlyoutContent.Template.FindName(
-                "PART_VerticalScrollBar",
-                FlyoutContent) as ScrollBar;
-            if (verticalScrollBar is not null)
-            {
-                verticalScrollBar.Opacity = 0;
-                verticalScrollBar.IsHitTestVisible = false;
-            }
-
             FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
             isResizeBackgroundActive = true;
             if (SystemParameters.ClientAreaAnimation)
@@ -511,12 +498,6 @@ public partial class MainWindow : Window
         }
         finally
         {
-            if (verticalScrollBar is not null)
-            {
-                verticalScrollBar.ClearValue(OpacityProperty);
-                verticalScrollBar.ClearValue(IsHitTestVisibleProperty);
-            }
-
             if (isResizeBackgroundActive)
             {
                 FlyoutPositioner.EndResizeSurfaceBackground(this);
@@ -530,6 +511,20 @@ public partial class MainWindow : Window
             cancellation.Dispose();
             QueueContentResize();
         }
+    }
+
+    private double MeasureDesiredSurfaceHeight()
+    {
+        double horizontalBorder = FlyoutSurface.BorderThickness.Left + FlyoutSurface.BorderThickness.Right;
+        double availableContentWidth = Math.Max(1, FlyoutSurface.ActualWidth - horizontalBorder);
+
+        // ScrollViewer の現在の viewport 高さを計測に使うと、折りたたみ後も以前の高さが
+        // DesiredSize に残る。高さ制約を外して、中身そのものが必要とする高さを再計測する。
+        FlyoutContentPanel.Measure(new Size(availableContentWidth, double.PositiveInfinity));
+        return FlyoutMotionCalculator.CalculateDesiredSurfaceHeight(
+            FlyoutContentPanel.DesiredSize.Height,
+            0,
+            FlyoutSurface.BorderThickness.Top + FlyoutSurface.BorderThickness.Bottom);
     }
 
     private static Task WaitForNextRenderAsync()
@@ -580,6 +575,43 @@ public partial class MainWindow : Window
     }
 
     private void HandleContentSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!IsVisible || isClosing || SizeToContent != System.Windows.SizeToContent.Manual)
+        {
+            return;
+        }
+
+        RequestContentResize();
+    }
+
+    private void HandleDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (observedViewModel is not null)
+        {
+            observedViewModel.PropertyChanged -= HandleViewModelPropertyChanged;
+        }
+
+        observedViewModel = e.NewValue as MainWindowViewModel;
+        if (observedViewModel is not null)
+        {
+            observedViewModel.PropertyChanged += HandleViewModelPropertyChanged;
+        }
+    }
+
+    private void HandleViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainWindowViewModel.IsAcExpanded)
+            or nameof(MainWindowViewModel.IsBatteryExpanded)
+            or nameof(MainWindowViewModel.HasStatusMessage)
+            or nameof(MainWindowViewModel.HasAcError)
+            or nameof(MainWindowViewModel.HasBatteryError)
+            or nameof(MainWindowViewModel.HasSleepError))
+        {
+            RequestContentResize();
+        }
+    }
+
+    private void RequestContentResize()
     {
         if (!IsVisible || isClosing || SizeToContent != System.Windows.SizeToContent.Manual)
         {
@@ -637,6 +669,7 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.Expand(PowerSettingTarget.AcPower);
+            RequestContentResize();
         }
     }
 
@@ -645,6 +678,7 @@ public partial class MainWindow : Window
         if (DataContext is MainWindowViewModel viewModel)
         {
             viewModel.Expand(PowerSettingTarget.Battery);
+            RequestContentResize();
         }
     }
 
