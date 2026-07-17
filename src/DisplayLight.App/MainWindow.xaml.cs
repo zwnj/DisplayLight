@@ -484,8 +484,7 @@ public partial class MainWindow : Window
                 currentPlacement = target;
                 currentWindowLocation = target.Location;
                 currentWindowSize = target.Size;
-                await WaitForNextRenderAsync();
-                FlyoutContent.IsHitTestVisible = true;
+                await SynchronizeLayoutAfterResizeAsync();
             }
         }
         catch (Win32Exception)
@@ -511,6 +510,23 @@ public partial class MainWindow : Window
             cancellation.Dispose();
             QueueContentResize();
         }
+    }
+
+    private async Task SynchronizeLayoutAfterResizeAsync()
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            // Hidden の ScrollViewer は表示上のバーがなくても内部オフセットを保持できる。
+            // 伸縮後の見た目と入力座標を一致させるため、先頭へ戻して最終サイズで再配置する。
+            FlyoutContent.ScrollToVerticalOffset(0);
+            FlyoutContent.InvalidateMeasure();
+            FlyoutSurface.InvalidateArrange();
+            UpdateLayout();
+        }, DispatcherPriority.Loaded);
+
+        await WaitForNextRenderAsync();
+        FlyoutContent.IsHitTestVisible = true;
+        Mouse.Synchronize();
     }
 
     private double MeasureDesiredSurfaceHeight()
