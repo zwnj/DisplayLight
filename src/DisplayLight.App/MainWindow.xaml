@@ -353,7 +353,8 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
-            <StackPanel Margin="20,14,20,18">
+            <StackPanel x:Name="FlyoutContentPanel"
+                        Margin="20,14,20,18">
                 <Grid Height="44">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

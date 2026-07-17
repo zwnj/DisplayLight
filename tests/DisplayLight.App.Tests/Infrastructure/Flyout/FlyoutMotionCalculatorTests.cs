@@ -82,4 +82,20 @@ public sealed class FlyoutMotionCalculatorTests
 
         Assert.Equal(expected, result, precision: 3);
     }
+
+    [Fact]
+    public void BoundsInterpolationMovesAndResizesTogether()
+    {
+        NativePoint location = FlyoutMotionCalculator.InterpolateBoundsLocation(
+            new NativePoint(100, 300),
+            new NativePoint(100, 100),
+            0.5);
+        NativeSize size = FlyoutMotionCalculator.InterpolateBoundsSize(
+            new NativeSize(372, 300),
+            new NativeSize(372, 500),
+            0.5);
+
+        Assert.Equal(new NativePoint(100, 200), location);
+        Assert.Equal(new NativeSize(372, 400), size);
+    }
 }

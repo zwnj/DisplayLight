@@ -64,6 +64,9 @@ internal static class FlyoutPositioner
     }
 
     internal static void Move(Window window, FlyoutWindowPlacement placement, NativePoint location)
+        => Move(window, location, placement.Size);
+
+    internal static void Move(Window window, NativePoint location, NativeSize size)
     {
         ArgumentNullException.ThrowIfNull(window);
 
@@ -74,19 +77,12 @@ internal static class FlyoutPositioner
                 nint.Zero,
                 location.X,
                 location.Y,
-                placement.Size.Width,
-                placement.Size.Height,
+                size.Width,
+                size.Height,
                 SetWindowPositionNoActivate | SetWindowPositionNoZOrder))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "フライアウトを通知領域の近くへ配置できませんでした。");
         }
-    }
-
-    internal static FlyoutWindowPlacement Position(Window window, NativeRectangle? iconBounds)
-    {
-        FlyoutWindowPlacement placement = Calculate(window, iconBounds);
-        Move(window, placement, placement.Location);
-        return placement;
     }
 
     internal static void ApplyWindowAppearance(Window window)

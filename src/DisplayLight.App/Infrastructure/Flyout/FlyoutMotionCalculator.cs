@@ -5,6 +5,7 @@ internal static class FlyoutMotionCalculator
     internal const int OpeningDurationMilliseconds = 250;
     internal const int ClosingDurationMilliseconds = 170;
     internal const int ContentRevealDurationMilliseconds = 120;
+    internal const int BoundsResizeDurationMilliseconds = 180;
 
     internal static NativePoint OffsetTowardsTaskbar(
         NativePoint location,
@@ -61,12 +62,32 @@ internal static class FlyoutMotionCalculator
     internal static double InterpolateContentOpacity(double startOpacity, double progress)
     {
         double normalized = Math.Clamp(progress, 0, 1);
-        double smoothStep = normalized * normalized * (3 - (2 * normalized));
+        double smoothStep = SmoothStep(normalized);
         return startOpacity + ((1 - startOpacity) * smoothStep);
+    }
+
+    internal static NativePoint InterpolateBoundsLocation(
+        NativePoint start,
+        NativePoint end,
+        double progress) =>
+        Interpolate(start, end, SmoothStep(Math.Clamp(progress, 0, 1)));
+
+    internal static NativeSize InterpolateBoundsSize(
+        NativeSize start,
+        NativeSize end,
+        double progress)
+    {
+        double smoothStep = SmoothStep(Math.Clamp(progress, 0, 1));
+        return new NativeSize(
+            Math.Max(1, (int)Math.Round(start.Width + ((end.Width - start.Width) * smoothStep))),
+            Math.Max(1, (int)Math.Round(start.Height + ((end.Height - start.Height) * smoothStep))));
     }
 
     private static NativePoint Interpolate(NativePoint start, NativePoint end, double easedProgress) =>
         new(
             (int)Math.Round(start.X + ((end.X - start.X) * easedProgress)),
             (int)Math.Round(start.Y + ((end.Y - start.Y) * easedProgress)));
+
+    private static double SmoothStep(double normalized) =>
+        normalized * normalized * (3 - (2 * normalized));
 }

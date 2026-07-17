@@ -16,19 +16,23 @@ public partial class MainWindow : Window
     private bool isCloseAllowed;
     private bool isAuxiliaryMenuOpen;
     private bool isClosing;
+    private bool isContentResizePending;
+    private bool isContentResizeQueued;
     private int activeMotionCount;
     private bool isPositioning;
     private bool useLightTheme = true;
     private CancellationTokenSource? motionCancellation;
+    private CancellationTokenSource? sizeMotionCancellation;
     private FlyoutWindowPlacement? currentPlacement;
     private NativePoint? currentWindowLocation;
+    private NativeSize? currentWindowSize;
     private NativeRectangle? lastIconBounds;
 
     public MainWindow()
     {
         InitializeComponent();
         SourceInitialized += HandleSourceInitialized;
-        SizeChanged += HandleSizeChanged;
+        FlyoutContentPanel.SizeChanged += HandleContentSizeChanged;
     }
 
     public event EventHandler? ExitRequested;
@@ -53,6 +57,7 @@ public partial class MainWindow : Window
             UpdateLayout();
             FlyoutWindowPlacement placement = FlyoutPositioner.Calculate(this, lastIconBounds);
             currentPlacement = placement;
+            SizeToContent = System.Windows.SizeToContent.Manual;
 
             bool shouldAnimate = SystemParameters.ClientAreaAnimation;
             if (!wasVisible)
@@ -70,6 +75,7 @@ public partial class MainWindow : Window
 
             FlyoutPositioner.Move(this, placement, shouldAnimate ? start : placement.Location);
             currentWindowLocation = shouldAnimate ? start : placement.Location;
+            currentWindowSize = placement.Size;
             Opacity = 1;
             if (!IsVisible)
             {
@@ -94,6 +100,7 @@ public partial class MainWindow : Window
             {
                 FlyoutPositioner.Move(this, placement, placement.Location);
                 currentWindowLocation = placement.Location;
+                currentWindowSize = placement.Size;
                 Opacity = 1;
 
                 if (shouldAnimate && FlyoutContent.Opacity < 1)
@@ -134,30 +141,6 @@ public partial class MainWindow : Window
             }
 
             cancellation.Dispose();
-        }
-    }
-
-    private void PositionFlyout()
-    {
-        if (isPositioning || activeMotionCount > 0)
-        {
-            return;
-        }
-
-        isPositioning = true;
-        try
-        {
-            UpdateLayout();
-            currentPlacement = FlyoutPositioner.Position(this, lastIconBounds);
-            currentWindowLocation = currentPlacement.Value.Location;
-        }
-        catch (Win32Exception)
-        {
-            PositionFallback();
-        }
-        finally
-        {
-            isPositioning = false;
         }
     }
 
@@ -215,12 +198,14 @@ public partial class MainWindow : Window
             if (SystemParameters.ClientAreaAnimation && currentPlacement is FlyoutWindowPlacement placement)
             {
                 NativePoint start = currentWindowLocation ?? placement.Location;
+                NativeSize size = currentWindowSize ?? placement.Size;
+                FlyoutWindowPlacement motionPlacement = placement with { Size = size };
                 NativePoint end = FlyoutMotionCalculator.OffsetTowardsTaskbar(
-                    placement.Location,
+                    start,
                     placement.Edge,
-                    FlyoutMotionCalculator.CalculateHiddenDistance(placement.Size, placement.Edge));
+                    FlyoutMotionCalculator.CalculateHiddenDistance(size, placement.Edge));
                 await AnimateWindowAsync(
-                    placement,
+                    motionPlacement,
                     start,
                     end,
                     isOpening: false,
@@ -294,6 +279,7 @@ public partial class MainWindow : Window
                     : FlyoutMotionCalculator.InterpolateClosing(start, end, progress);
                 FlyoutPositioner.Move(this, placement, location);
                 currentWindowLocation = location;
+                currentWindowSize = placement.Size;
             }
             catch (Exception exception) when (exception is Win32Exception)
             {
@@ -312,6 +298,7 @@ public partial class MainWindow : Window
             CompositionTarget.Rendering -= HandleRendering;
             stopwatch.Stop();
             activeMotionCount--;
+            QueueContentResize();
             if (exception is null)
             {
                 completion.TrySetResult();
@@ -366,11 +353,156 @@ public partial class MainWindow : Window
             CompositionTarget.Rendering -= HandleRendering;
             stopwatch.Stop();
             activeMotionCount--;
+            QueueContentResize();
             completion.TrySetResult();
         }
     }
 
-    private void CancelMotion() => motionCancellation?.Cancel();
+    private async Task AnimateBoundsAsync(
+        NativePoint startLocation,
+        NativeSize startSize,
+        NativePoint endLocation,
+        NativeSize endSize,
+        TimeSpan duration,
+        CancellationToken cancellationToken)
+    {
+        TaskCompletionSource completion = new();
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        TimeSpan lastRenderingTime = TimeSpan.MinValue;
+
+        activeMotionCount++;
+        CompositionTarget.Rendering += HandleRendering;
+        await completion.Task;
+
+        void HandleRendering(object? sender, EventArgs e)
+        {
+            if (e is RenderingEventArgs renderingArgs)
+            {
+                if (renderingArgs.RenderingTime == lastRenderingTime)
+                {
+                    return;
+                }
+
+                lastRenderingTime = renderingArgs.RenderingTime;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                Complete();
+                return;
+            }
+
+            double progress = Math.Clamp(stopwatch.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+            try
+            {
+                NativePoint location = FlyoutMotionCalculator.InterpolateBoundsLocation(
+                    startLocation,
+                    endLocation,
+                    progress);
+                NativeSize size = FlyoutMotionCalculator.InterpolateBoundsSize(startSize, endSize, progress);
+                FlyoutPositioner.Move(this, location, size);
+                currentWindowLocation = location;
+                currentWindowSize = size;
+            }
+            catch (Exception exception) when (exception is Win32Exception)
+            {
+                Complete(exception);
+                return;
+            }
+
+            if (progress >= 1)
+            {
+                Complete();
+            }
+        }
+
+        void Complete(Exception? exception = null)
+        {
+            CompositionTarget.Rendering -= HandleRendering;
+            stopwatch.Stop();
+            activeMotionCount--;
+            QueueContentResize();
+            if (exception is null)
+            {
+                completion.TrySetResult();
+            }
+            else
+            {
+                completion.TrySetException(exception);
+            }
+        }
+    }
+
+    private async Task ResizeFlyoutToContentAsync()
+    {
+        if (!IsVisible || isClosing || activeMotionCount > 0 || isPositioning)
+        {
+            return;
+        }
+
+        isContentResizePending = false;
+        sizeMotionCancellation?.Cancel();
+        CancellationTokenSource cancellation = new();
+        sizeMotionCancellation = cancellation;
+
+        try
+        {
+            UpdateLayout();
+            FlyoutWindowPlacement target = FlyoutPositioner.Calculate(this, lastIconBounds);
+            NativePoint startLocation = currentWindowLocation ?? target.Location;
+            NativeSize startSize = currentWindowSize ?? target.Size;
+            if (startLocation == target.Location && startSize == target.Size)
+            {
+                currentPlacement = target;
+                return;
+            }
+
+            FlyoutContent.IsHitTestVisible = false;
+            if (SystemParameters.ClientAreaAnimation)
+            {
+                await AnimateBoundsAsync(
+                    startLocation,
+                    startSize,
+                    target.Location,
+                    target.Size,
+                    TimeSpan.FromMilliseconds(FlyoutMotionCalculator.BoundsResizeDurationMilliseconds),
+                    cancellation.Token);
+            }
+
+            if (!cancellation.IsCancellationRequested)
+            {
+                FlyoutPositioner.Move(this, target, target.Location);
+                currentPlacement = target;
+                currentWindowLocation = target.Location;
+                currentWindowSize = target.Size;
+                FlyoutContent.IsHitTestVisible = true;
+            }
+        }
+        catch (Win32Exception)
+        {
+            if (!cancellation.IsCancellationRequested)
+            {
+                PositionFallback();
+                FlyoutContent.IsHitTestVisible = true;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(sizeMotionCancellation, cancellation))
+            {
+                sizeMotionCancellation = null;
+            }
+
+            cancellation.Dispose();
+            QueueContentResize();
+        }
+    }
+
+    private void CancelMotion()
+    {
+        motionCancellation?.Cancel();
+        sizeMotionCancellation?.Cancel();
+    }
 
     private void PositionFallback()
     {
@@ -379,6 +511,7 @@ public partial class MainWindow : Window
         Top = Math.Max(workArea.Top + 12, workArea.Bottom - ActualHeight - 12);
         currentPlacement = null;
         currentWindowLocation = null;
+        currentWindowSize = null;
     }
 
     private void CompleteHide()
@@ -388,6 +521,8 @@ public partial class MainWindow : Window
         FlyoutContent.Opacity = 1;
         FlyoutContent.IsHitTestVisible = true;
         currentWindowLocation = currentPlacement?.Location;
+        currentWindowSize = currentPlacement?.Size;
+        isContentResizePending = false;
         FlyoutHidden?.Invoke(this, EventArgs.Empty);
     }
 
@@ -397,14 +532,37 @@ public partial class MainWindow : Window
         FlyoutPositioner.ApplyTheme(this, useLightTheme);
     }
 
-    private void HandleSizeChanged(object sender, SizeChangedEventArgs e)
+    private void HandleContentSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!IsVisible || isPositioning)
+        if (!IsVisible || isClosing || SizeToContent != System.Windows.SizeToContent.Manual)
         {
             return;
         }
 
-        _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PositionFlyout);
+        isContentResizePending = true;
+        QueueContentResize();
+    }
+
+    private void QueueContentResize()
+    {
+        if (!isContentResizePending || isContentResizeQueued || !IsVisible || isClosing ||
+            activeMotionCount > 0 || isPositioning)
+        {
+            return;
+        }
+
+        isContentResizeQueued = true;
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            isContentResizeQueued = false;
+            if (!isContentResizePending || !IsVisible || isClosing || activeMotionCount > 0 || isPositioning)
+            {
+                QueueContentResize();
+                return;
+            }
+
+            _ = ResizeFlyoutToContentAsync();
+        });
     }
 
     private async void Window_Deactivated(object sender, EventArgs e)
