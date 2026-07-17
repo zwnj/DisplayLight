@@ -423,7 +423,6 @@ public partial class MainWindow : Window
             CompositionTarget.Rendering -= HandleRendering;
             stopwatch.Stop();
             activeMotionCount--;
-            QueueContentResize();
             if (exception is null)
             {
                 completion.TrySetResult();
@@ -447,6 +446,7 @@ public partial class MainWindow : Window
         CancellationTokenSource cancellation = new();
         sizeMotionCancellation = cancellation;
         bool isResizeBackgroundActive = false;
+        bool isInputSuppressed = false;
 
         try
         {
@@ -465,6 +465,7 @@ public partial class MainWindow : Window
             }
 
             FlyoutContent.IsHitTestVisible = false;
+            isInputSuppressed = true;
             FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
             isResizeBackgroundActive = true;
             if (SystemParameters.ClientAreaAnimation)
@@ -497,6 +498,14 @@ public partial class MainWindow : Window
         }
         finally
         {
+            // 保留された再計測や非表示操作が伸縮を中断しても、入力停止だけは残さない。
+            // 開き直すまで全ボタンが反応しなくなるため、成功経路ではなく finally で復元する。
+            if (isInputSuppressed)
+            {
+                FlyoutContent.IsHitTestVisible = true;
+                Mouse.Synchronize();
+            }
+
             if (isResizeBackgroundActive)
             {
                 FlyoutPositioner.EndResizeSurfaceBackground(this);
