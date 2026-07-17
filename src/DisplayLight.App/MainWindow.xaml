@@ -13,6 +13,7 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
+        ShowActivated="False"
         FontFamily="Segoe UI Variable Text, Segoe UI"
         Background="Transparent"
         Foreground="{DynamicResource TextPrimaryBrush}"

@@ -6,6 +6,7 @@ internal static class FlyoutMotionCalculator
     internal const int ClosingDurationMilliseconds = 170;
     internal const int ContentRevealDurationMilliseconds = 120;
     internal const int BoundsResizeDurationMilliseconds = 180;
+    internal const double OpeningContentOpacity = 0.72;
 
     internal static NativePoint OffsetTowardsTaskbar(
         NativePoint location,

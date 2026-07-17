@@ -84,6 +84,13 @@ public sealed class FlyoutMotionCalculatorTests
     }
 
     [Fact]
+    public void OpeningKeepsContentVisibleBehindMovingSurface()
+    {
+        Assert.InRange(FlyoutMotionCalculator.OpeningContentOpacity, 0.5, 0.9);
+        Assert.True(FlyoutMotionCalculator.OpeningContentOpacity < 1);
+    }
+
+    [Fact]
     public void BoundsInterpolationMovesAndResizesTogether()
     {
         NativePoint location = FlyoutMotionCalculator.InterpolateBoundsLocation(

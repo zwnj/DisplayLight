@@ -64,8 +64,13 @@ public partial class MainWindow : Window
             bool shouldAnimate = SystemParameters.ClientAreaAnimation;
             if (!wasVisible)
             {
-                FlyoutContent.Opacity = shouldAnimate ? 0 : 1;
+                // 内容を完全に消すと外側の灰色面だけが移動し、別ウィンドウのように見える。
+                // 初回描画はウィンドウ全体を隠して準備し、スライド中の内容は薄く残す。
+                FlyoutContent.Opacity = shouldAnimate
+                    ? FlyoutMotionCalculator.OpeningContentOpacity
+                    : 1;
                 FlyoutContent.IsHitTestVisible = !shouldAnimate;
+                Opacity = shouldAnimate ? 0 : 1;
             }
 
             NativePoint start = wasVisible && currentWindowLocation is NativePoint visibleLocation
@@ -78,10 +83,20 @@ public partial class MainWindow : Window
             FlyoutPositioner.Move(this, placement, shouldAnimate ? start : placement.Location);
             currentWindowLocation = shouldAnimate ? start : placement.Location;
             currentWindowSize = placement.Size;
-            Opacity = 1;
             if (!IsVisible)
             {
                 Show();
+            }
+
+            if (!wasVisible && shouldAnimate)
+            {
+                await PrepareOpeningSurfaceAsync(cancellation.Token);
+                if (cancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Opacity = 1;
             }
 
             _ = Activate();
@@ -572,6 +587,21 @@ public partial class MainWindow : Window
         {
             CompositionTarget.Rendering -= HandleRendering;
             completion.TrySetResult();
+        }
+    }
+
+    private async Task PrepareOpeningSurfaceAsync(CancellationToken cancellationToken)
+    {
+        await Dispatcher.InvokeAsync(() =>
+        {
+            FlyoutContent.InvalidateMeasure();
+            FlyoutSurface.InvalidateVisual();
+            UpdateLayout();
+        }, DispatcherPriority.Render, CancellationToken.None);
+
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            await WaitForNextRenderAsync();
         }
     }
 
