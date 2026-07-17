@@ -444,6 +444,7 @@ public partial class MainWindow : Window
         sizeMotionCancellation?.Cancel();
         CancellationTokenSource cancellation = new();
         sizeMotionCancellation = cancellation;
+        bool isResizeBackgroundActive = false;
 
         try
         {
@@ -458,6 +459,8 @@ public partial class MainWindow : Window
             }
 
             FlyoutContent.IsHitTestVisible = false;
+            FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
+            isResizeBackgroundActive = true;
             if (SystemParameters.ClientAreaAnimation)
             {
                 await AnimateBoundsAsync(
@@ -475,6 +478,7 @@ public partial class MainWindow : Window
                 currentPlacement = target;
                 currentWindowLocation = target.Location;
                 currentWindowSize = target.Size;
+                await WaitForNextRenderAsync();
                 FlyoutContent.IsHitTestVisible = true;
             }
         }
@@ -488,6 +492,11 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (isResizeBackgroundActive)
+            {
+                FlyoutPositioner.EndResizeSurfaceBackground(this);
+            }
+
             if (ReferenceEquals(sizeMotionCancellation, cancellation))
             {
                 sizeMotionCancellation = null;
@@ -495,6 +504,19 @@ public partial class MainWindow : Window
 
             cancellation.Dispose();
             QueueContentResize();
+        }
+    }
+
+    private static Task WaitForNextRenderAsync()
+    {
+        TaskCompletionSource completion = new();
+        CompositionTarget.Rendering += HandleRendering;
+        return completion.Task;
+
+        void HandleRendering(object? sender, EventArgs e)
+        {
+            CompositionTarget.Rendering -= HandleRendering;
+            completion.TrySetResult();
         }
     }
 

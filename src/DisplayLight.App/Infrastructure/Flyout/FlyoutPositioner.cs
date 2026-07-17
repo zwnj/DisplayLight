@@ -85,6 +85,41 @@ internal static class FlyoutPositioner
         }
     }
 
+    internal static void BeginResizeSurfaceBackground(Window window, Brush surfaceBrush)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(surfaceBrush);
+
+        nint handle = new WindowInteropHelper(window).EnsureHandle();
+        if (HwndSource.FromHwnd(handle) is not HwndSource source)
+        {
+            return;
+        }
+
+        source.CompositionTarget.BackgroundColor = GetOpaqueSurfaceColor(surfaceBrush);
+    }
+
+    internal static void EndResizeSurfaceBackground(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        nint handle = new WindowInteropHelper(window).EnsureHandle();
+        if (HwndSource.FromHwnd(handle) is HwndSource source)
+        {
+            source.CompositionTarget.BackgroundColor = Colors.Transparent;
+        }
+    }
+
+    internal static Color GetOpaqueSurfaceColor(Brush surfaceBrush)
+    {
+        ArgumentNullException.ThrowIfNull(surfaceBrush);
+
+        Color color = surfaceBrush is SolidColorBrush solidColorBrush
+            ? solidColorBrush.Color
+            : SystemColors.WindowColor;
+        return Color.FromRgb(color.R, color.G, color.B);
+    }
+
     internal static void ApplyWindowAppearance(Window window)
     {
         nint handle = new WindowInteropHelper(window).EnsureHandle();
