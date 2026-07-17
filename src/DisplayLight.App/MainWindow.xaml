@@ -350,6 +350,9 @@
             BorderThickness="1"
             CornerRadius="8"
             Background="{DynamicResource SurfaceBrush}">
+        <Border.RenderTransform>
+            <TranslateTransform x:Name="FlyoutSurfaceTranslation" />
+        </Border.RenderTransform>
         <ScrollViewer x:Name="FlyoutContent"
                       VerticalScrollBarVisibility="Hidden"
                       HorizontalScrollBarVisibility="Disabled"

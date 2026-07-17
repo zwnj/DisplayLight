@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     private bool isContentResizeQueued;
     private int activeMotionCount;
     private bool isPositioning;
-    private bool isOpeningSurfaceBackgroundActive;
+    private bool isMotionBackdropSuspended;
     private bool useLightTheme = true;
     private CancellationTokenSource? motionCancellation;
     private CancellationTokenSource? sizeMotionCancellation;
@@ -70,22 +70,15 @@ public partial class MainWindow : Window
                 FlyoutContent.IsHitTestVisible = !shouldAnimate;
                 if (shouldAnimate)
                 {
-                    BeginOpeningSurfaceBackground();
+                    BeginSurfaceMotionAppearance();
                 }
 
                 openingCloaked = shouldAnimate && FlyoutPositioner.TrySetCloaked(this, true);
                 Opacity = shouldAnimate && !openingCloaked ? 0 : 1;
             }
 
-            NativePoint start = wasVisible && currentWindowLocation is NativePoint visibleLocation
-                ? visibleLocation
-                : FlyoutMotionCalculator.OffsetTowardsTaskbar(
-                    placement.Location,
-                    placement.Edge,
-                    FlyoutMotionCalculator.CalculateHiddenDistance(placement.Size, placement.Edge));
-
-            FlyoutPositioner.Move(this, placement, shouldAnimate ? start : placement.Location);
-            currentWindowLocation = shouldAnimate ? start : placement.Location;
+            FlyoutPositioner.Move(this, placement, placement.Location);
+            currentWindowLocation = placement.Location;
             currentWindowSize = placement.Size;
             if (!IsVisible)
             {
@@ -94,6 +87,11 @@ public partial class MainWindow : Window
 
             if (!wasVisible && shouldAnimate)
             {
+                UpdateLayout();
+                SetSurfaceOffset(FlyoutMotionCalculator.CalculateHiddenSurfaceOffset(
+                    FlyoutSurface.ActualWidth,
+                    FlyoutSurface.ActualHeight,
+                    placement.Edge));
                 await PrepareOpeningSurfaceAsync(cancellation.Token);
                 if (cancellation.IsCancellationRequested)
                 {
@@ -113,10 +111,8 @@ public partial class MainWindow : Window
 
             if (shouldAnimate)
             {
-                await AnimateWindowAsync(
-                    placement,
-                    start,
-                    placement.Location,
+                await AnimateSurfaceAsync(
+                    placement.Edge,
                     isOpening: true,
                     TimeSpan.FromMilliseconds(FlyoutMotionCalculator.OpeningDurationMilliseconds),
                     cancellation.Token);
@@ -128,6 +124,7 @@ public partial class MainWindow : Window
                 currentWindowLocation = placement.Location;
                 currentWindowSize = placement.Size;
                 Opacity = 1;
+                EndSurfaceMotionAppearance();
 
                 if (shouldAnimate && FlyoutContent.Opacity < 1)
                 {
@@ -138,7 +135,6 @@ public partial class MainWindow : Window
 
                 if (!cancellation.IsCancellationRequested)
                 {
-                    EndOpeningSurfaceBackground();
                     FlyoutContent.IsHitTestVisible = true;
                     if (focusPrimaryAction)
                     {
@@ -149,7 +145,8 @@ public partial class MainWindow : Window
         }
         catch (Win32Exception)
         {
-            EndOpeningSurfaceBackground();
+            EndSurfaceMotionAppearance();
+            SetSurfaceOffset(SurfaceOffset.Zero);
             if (openingCloaked)
             {
                 _ = FlyoutPositioner.TrySetCloaked(this, false);
@@ -201,6 +198,10 @@ public partial class MainWindow : Window
     {
         useLightTheme = useLight;
         FlyoutPositioner.ApplyTheme(this, useLightTheme);
+        if (isMotionBackdropSuspended)
+        {
+            FlyoutPositioner.SetBackdropEnabled(this, false);
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -241,17 +242,9 @@ public partial class MainWindow : Window
         {
             if (SystemParameters.ClientAreaAnimation && currentPlacement is FlyoutWindowPlacement placement)
             {
-                NativePoint start = currentWindowLocation ?? placement.Location;
-                NativeSize size = currentWindowSize ?? placement.Size;
-                FlyoutWindowPlacement motionPlacement = placement with { Size = size };
-                NativePoint end = FlyoutMotionCalculator.OffsetTowardsTaskbar(
-                    start,
+                BeginSurfaceMotionAppearance();
+                await AnimateSurfaceAsync(
                     placement.Edge,
-                    FlyoutMotionCalculator.CalculateHiddenDistance(size, placement.Edge));
-                await AnimateWindowAsync(
-                    motionPlacement,
-                    start,
-                    end,
                     isOpening: false,
                     TimeSpan.FromMilliseconds(FlyoutMotionCalculator.ClosingDurationMilliseconds),
                     cancellation.Token);
@@ -281,10 +274,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private Task AnimateWindowAsync(
-        FlyoutWindowPlacement placement,
-        NativePoint start,
-        NativePoint end,
+    private Task AnimateSurfaceAsync(
+        TaskbarEdge edge,
         bool isOpening,
         TimeSpan duration,
         CancellationToken cancellationToken)
@@ -292,6 +283,12 @@ public partial class MainWindow : Window
         TaskCompletionSource completion = new();
         Stopwatch stopwatch = Stopwatch.StartNew();
         TimeSpan lastRenderingTime = TimeSpan.MinValue;
+        SurfaceOffset start = new(FlyoutSurfaceTranslation.X, FlyoutSurfaceTranslation.Y);
+        SurfaceOffset hidden = FlyoutMotionCalculator.CalculateHiddenSurfaceOffset(
+            FlyoutSurface.ActualWidth,
+            FlyoutSurface.ActualHeight,
+            edge);
+        SurfaceOffset end = isOpening ? SurfaceOffset.Zero : hidden;
 
         activeMotionCount++;
         CompositionTarget.Rendering += HandleRendering;
@@ -316,41 +313,25 @@ public partial class MainWindow : Window
             }
 
             double progress = Math.Clamp(stopwatch.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
-            try
-            {
-                NativePoint location = isOpening
-                    ? FlyoutMotionCalculator.InterpolateOpening(start, end, progress)
-                    : FlyoutMotionCalculator.InterpolateClosing(start, end, progress);
-                FlyoutPositioner.Move(this, placement, location);
-                currentWindowLocation = location;
-                currentWindowSize = placement.Size;
-            }
-            catch (Exception exception) when (exception is Win32Exception)
-            {
-                Complete(exception);
-                return;
-            }
+            SurfaceOffset offset = isOpening
+                ? FlyoutMotionCalculator.InterpolateOpening(start, end, progress)
+                : FlyoutMotionCalculator.InterpolateClosing(start, end, progress);
+            SetSurfaceOffset(offset);
 
             if (progress >= 1)
             {
-                Complete(exception: null);
+                SetSurfaceOffset(end);
+                Complete();
             }
         }
 
-        void Complete(Exception? exception = null)
+        void Complete()
         {
             CompositionTarget.Rendering -= HandleRendering;
             stopwatch.Stop();
             activeMotionCount--;
             QueueContentResize();
-            if (exception is null)
-            {
-                completion.TrySetResult();
-            }
-            else
-            {
-                completion.TrySetException(exception);
-            }
+            completion.TrySetResult();
         }
     }
 
@@ -623,31 +604,41 @@ public partial class MainWindow : Window
 
         if (!cancellationToken.IsCancellationRequested)
         {
-            // Rendering は描画直前に発火する。より低い優先度へ一度戻してWPFの
-            // サーフェス更新を完了させ、DWMへのPresentまで待ってからクロークを外す。
             await Dispatcher.InvokeAsync(
                 static () => { },
                 DispatcherPriority.ContextIdle,
                 CancellationToken.None);
-            _ = FlyoutPositioner.TryFlushComposition();
         }
     }
 
-    private void BeginOpeningSurfaceBackground()
+    private void BeginSurfaceMotionAppearance()
     {
-        FlyoutPositioner.BeginResizeSurfaceBackground(this, FlyoutSurface.Background);
-        isOpeningSurfaceBackgroundActive = true;
-    }
-
-    private void EndOpeningSurfaceBackground()
-    {
-        if (!isOpeningSurfaceBackgroundActive)
+        if (isMotionBackdropSuspended)
         {
             return;
         }
 
-        FlyoutPositioner.EndResizeSurfaceBackground(this);
-        isOpeningSurfaceBackgroundActive = false;
+        // Desktop AcrylicはHWND全体へ描かれる。固定HWND内で前景Visualだけを
+        // 移動する間は停止し、完成位置に背景だけが残らないようにする。
+        FlyoutPositioner.SetBackdropEnabled(this, false);
+        isMotionBackdropSuspended = true;
+    }
+
+    private void EndSurfaceMotionAppearance()
+    {
+        if (!isMotionBackdropSuspended)
+        {
+            return;
+        }
+
+        FlyoutPositioner.SetBackdropEnabled(this, true);
+        isMotionBackdropSuspended = false;
+    }
+
+    private void SetSurfaceOffset(SurfaceOffset offset)
+    {
+        FlyoutSurfaceTranslation.X = offset.X;
+        FlyoutSurfaceTranslation.Y = offset.Y;
     }
 
     private void CancelMotion()
@@ -669,7 +660,8 @@ public partial class MainWindow : Window
     private void CompleteHide()
     {
         Hide();
-        EndOpeningSurfaceBackground();
+        SetSurfaceOffset(SurfaceOffset.Zero);
+        EndSurfaceMotionAppearance();
         _ = FlyoutPositioner.TrySetCloaked(this, false);
         Opacity = 1;
         FlyoutContent.Opacity = 1;

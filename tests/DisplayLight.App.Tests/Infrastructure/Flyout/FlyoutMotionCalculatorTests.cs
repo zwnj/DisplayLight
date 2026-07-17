@@ -71,6 +71,37 @@ public sealed class FlyoutMotionCalculatorTests
     }
 
     [Theory]
+    [InlineData(TaskbarEdge.Bottom, 0, 500)]
+    [InlineData(TaskbarEdge.Top, 0, -500)]
+    [InlineData(TaskbarEdge.Left, -372, 0)]
+    [InlineData(TaskbarEdge.Right, 372, 0)]
+    internal void HiddenSurfaceOffsetMovesVisualOutsideFixedWindow(
+        TaskbarEdge edge,
+        double expectedX,
+        double expectedY)
+    {
+        SurfaceOffset result = FlyoutMotionCalculator.CalculateHiddenSurfaceOffset(372, 500, edge);
+
+        Assert.Equal(new SurfaceOffset(expectedX, expectedY), result);
+    }
+
+    [Fact]
+    public void SurfaceOpeningAndClosingUseTheirRespectiveCurves()
+    {
+        SurfaceOffset opening = FlyoutMotionCalculator.InterpolateOpening(
+            new SurfaceOffset(0, 500),
+            SurfaceOffset.Zero,
+            0.25);
+        SurfaceOffset closing = FlyoutMotionCalculator.InterpolateClosing(
+            SurfaceOffset.Zero,
+            new SurfaceOffset(0, 500),
+            0.25);
+
+        Assert.Equal(210.9375, opening.Y, precision: 3);
+        Assert.Equal(7.8125, closing.Y, precision: 3);
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(0.5, 0.5)]
     [InlineData(1, 1)]

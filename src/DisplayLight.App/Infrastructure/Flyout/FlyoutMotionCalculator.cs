@@ -4,7 +4,7 @@ internal static class FlyoutMotionCalculator
 {
     internal const int OpeningDurationMilliseconds = 250;
     internal const int ClosingDurationMilliseconds = 170;
-    internal const int ContentRevealDurationMilliseconds = 120;
+    internal const int ContentRevealDurationMilliseconds = 200;
     internal const int BoundsResizeDurationMilliseconds = 180;
     internal const double OpeningContentOpacity = 0;
 
@@ -60,6 +60,51 @@ internal static class FlyoutMotionCalculator
         return Interpolate(start, end, eased);
     }
 
+    internal static SurfaceOffset CalculateHiddenSurfaceOffset(
+        double width,
+        double height,
+        TaskbarEdge edge)
+    {
+        if (!double.IsFinite(width) || width <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width));
+        }
+
+        if (!double.IsFinite(height) || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(height));
+        }
+
+        return edge switch
+        {
+            TaskbarEdge.Bottom => new SurfaceOffset(0, height),
+            TaskbarEdge.Top => new SurfaceOffset(0, -height),
+            TaskbarEdge.Left => new SurfaceOffset(-width, 0),
+            TaskbarEdge.Right => new SurfaceOffset(width, 0),
+            _ => SurfaceOffset.Zero,
+        };
+    }
+
+    internal static SurfaceOffset InterpolateOpening(
+        SurfaceOffset start,
+        SurfaceOffset end,
+        double progress)
+    {
+        double normalized = Math.Clamp(progress, 0, 1);
+        double eased = 1 - Math.Pow(1 - normalized, 3);
+        return Interpolate(start, end, eased);
+    }
+
+    internal static SurfaceOffset InterpolateClosing(
+        SurfaceOffset start,
+        SurfaceOffset end,
+        double progress)
+    {
+        double normalized = Math.Clamp(progress, 0, 1);
+        double eased = Math.Pow(normalized, 3);
+        return Interpolate(start, end, eased);
+    }
+
     internal static double InterpolateContentOpacity(double startOpacity, double progress)
     {
         double normalized = Math.Clamp(progress, 0, 1);
@@ -101,6 +146,16 @@ internal static class FlyoutMotionCalculator
             (int)Math.Round(start.X + ((end.X - start.X) * easedProgress)),
             (int)Math.Round(start.Y + ((end.Y - start.Y) * easedProgress)));
 
+    private static SurfaceOffset Interpolate(SurfaceOffset start, SurfaceOffset end, double easedProgress) =>
+        new(
+            start.X + ((end.X - start.X) * easedProgress),
+            start.Y + ((end.Y - start.Y) * easedProgress));
+
     private static double SmoothStep(double normalized) =>
         normalized * normalized * (3 - (2 * normalized));
+}
+
+internal readonly record struct SurfaceOffset(double X, double Y)
+{
+    internal static SurfaceOffset Zero { get; } = new(0, 0);
 }
