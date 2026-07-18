@@ -69,7 +69,7 @@ jobs:
         run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}' -KeepReleaseDirectory
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: DisplayLight-${{ steps.version.outputs.version }}-win-x64
           path: artifacts/release
