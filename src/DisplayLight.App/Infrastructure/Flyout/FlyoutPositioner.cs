@@ -143,6 +143,11 @@ internal static class FlyoutPositioner
         int roundedCornerPreference = 2;
         _ = NativeMethods.SetDwmWindowAttribute(handle, 33, ref roundedCornerPreference, sizeof(int));
 
+        // 固定HWND内で前景面だけを移動するため、DWM枠を残すと完成位置へ
+        // 白い外周だけが先行表示される。外周線はWPFのFlyoutSurfaceが描画する。
+        int borderColor = unchecked((int)0xFFFFFFFE);
+        _ = NativeMethods.SetDwmWindowAttribute(handle, 34, ref borderColor, sizeof(int));
+
         // 独自の位置アニメーションとDWM既定の表示遷移が重なると、背景面だけが
         // 別のウィンドウのように先行表示されるため、既定遷移は使用しない。
         int transitionsForcedDisabled = 1;
