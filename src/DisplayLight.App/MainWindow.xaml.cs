@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     private async Task ShowAtAsync(NativeRectangle? iconBounds, bool focusPrimaryAction)
     {
         lastIconBounds = iconBounds;
+        Topmost = false;
         bool wasVisible = IsVisible;
         CancelMotion();
         isClosing = false;
@@ -235,6 +236,7 @@ public partial class MainWindow : Window
         isClosing = true;
         CancelMotion();
         FlyoutContent.IsHitTestVisible = false;
+        Topmost = true;
         CancellationTokenSource cancellation = new();
         motionCancellation = cancellation;
 
@@ -660,6 +662,7 @@ public partial class MainWindow : Window
     private void CompleteHide()
     {
         Hide();
+        Topmost = false;
         SetSurfaceOffset(SurfaceOffset.Zero);
         EndSurfaceMotionAppearance();
         _ = FlyoutPositioner.TrySetCloaked(this, false);
@@ -768,10 +771,20 @@ public partial class MainWindow : Window
     private async void Window_Deactivated(object sender, EventArgs e)
     {
         observedViewModel?.CancelDisplayOffCountdown();
+        if (!isAuxiliaryMenuOpen && !IsActive && IsVisible)
+        {
+            // クリック先のウィンドウが手前へ来ても、閉じる面をアニメーション完了まで見せる。
+            Topmost = true;
+        }
+
         await Task.Delay(120);
         if (!isAuxiliaryMenuOpen && !IsActive && IsVisible)
         {
             HideFlyout();
+        }
+        else if (!isClosing)
+        {
+            Topmost = false;
         }
     }
 
