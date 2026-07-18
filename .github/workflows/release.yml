@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish Windows x64 release
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Validate release tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+              throw "Release tag must use vMAJOR.MINOR.PATCH: $tag"
+          }
+
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "version=$($Matches.version)" -Encoding utf8
+
+      - name: Verify source
+        shell: pwsh
+        run: ./scripts/verify.ps1
+
+      - name: Package self-contained application
+        shell: pwsh
+        run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}' -NoRestore
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: DisplayLight-${{ steps.version.outputs.version }}-win-x64
+          path: |
+            artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip
+            artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attest release archive
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $notes = @"
+          ## ダウンロード
+
+          ``DisplayLight-$env:RELEASE_VERSION-win-x64.zip``を展開し、``DisplayLight.App.exe``を実行してください。
+          .NETランタイムの追加インストールは不要です。
+
+          > [!WARNING]
+          > このリリースはコード署名されていません。添付された``.sha256``でZIPのSHA-256を確認してください。
+          "@
+
+          gh release create $env:RELEASE_TAG `
+              "artifacts/release/DisplayLight-$env:RELEASE_VERSION-win-x64.zip" `
+              "artifacts/release/DisplayLight-$env:RELEASE_VERSION-win-x64.zip.sha256" `
+              --verify-tag `
+              --fail-on-no-commits `
+              --generate-notes `
+              --notes $notes `
+              --title "DisplayLight $env:RELEASE_VERSION"

@@ -18,7 +18,22 @@ MVPはCodex連携の手前までを対象とし、電源操作は利用者が画
 手動スリープ防止はプロセス内だけで保持し、解除、エラー、アプリ終了時に解放します。
 Codex Hook、複数セッション、自動スリープはAgent Preview以降の対象です。
 
-## 必要な環境
+## ダウンロードと実行
+
+GitHub Releasesから`DisplayLight-<version>-win-x64.zip`をダウンロードし、任意のフォルダーへ展開します。
+展開後の`DisplayLight.App.exe`を実行すると、通知領域へ常駐します。
+
+配布ZIPは.NETランタイムを含むため、利用者が.NET SDKまたはランタイムを別途インストールする必要はありません。
+対象環境はWindows 11 x64です。
+
+0.1系にはコード署名がないため、Windows SmartScreenが発行元不明の警告を表示する可能性があります。
+Releaseに添付された`.sha256`とダウンロードしたZIPのSHA-256を照合してから実行してください。
+
+```powershell
+Get-FileHash ./DisplayLight-0.1.0-win-x64.zip -Algorithm SHA256
+```
+
+## 開発環境
 
 - Windows 11のx64環境
 - .NET 10 SDKの`global.json`に記載したFeature Band
@@ -78,6 +93,7 @@ dotnet test DisplayLight.slnx --configuration Release --no-build --no-restore
 - [`DESIGN.md`](./DESIGN.md)：MVP境界、アーキテクチャ、安全性、状態モデル。
 - [`docs/OPEN_QUESTIONS.md`](./docs/OPEN_QUESTIONS.md)：確定した判断と後続フェーズの未決事項。
 - [`docs/TESTING.md`](./docs/TESTING.md)：自動検証と実機確認の分離。
+- [`docs/RELEASING.md`](./docs/RELEASING.md)：自己完結型ZIPとGitHub Releaseの作成手順。
 - [`docs/adr`](./docs/adr)：採用した技術判断の履歴。
 - [`docs/plans/2026-07-15-mvp.md`](./docs/plans/2026-07-15-mvp.md)：MVP実装の実行記録。
 - [`PLANS.md`](./PLANS.md)：長い実装作業で使う実行計画の書式。
