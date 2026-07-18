@@ -17,6 +17,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'NuGet パッケージの復元に失敗しました。'
     }
+
+    dotnet tool restore
+    if ($LASTEXITCODE -ne 0) {
+        throw 'ローカルツールの復元に失敗しました。'
+    }
 }
 finally {
     Pop-Location

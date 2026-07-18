@@ -730,7 +730,8 @@ public partial class MainWindow : Window
             or nameof(MainWindowViewModel.HasDisplayOffError)
             or nameof(MainWindowViewModel.HasAcError)
             or nameof(MainWindowViewModel.HasBatteryError)
-            or nameof(MainWindowViewModel.HasSleepError))
+            or nameof(MainWindowViewModel.HasSleepError)
+            or nameof(MainWindowViewModel.IsUpdateStatusVisible))
         {
             RequestContentResize();
         }

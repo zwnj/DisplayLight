@@ -4,7 +4,9 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version,
 
-    [switch]$NoRestore
+    [switch]$NoRestore,
+
+    [switch]$KeepReleaseDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,23 +44,23 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $artifactsRoot = Join-Path $repositoryRoot 'artifacts'
 $publishDirectory = Join-Path $artifactsRoot "publish\DisplayLight-$Version-win-x64"
 $releaseDirectory = Join-Path $artifactsRoot 'release'
-$archiveName = "DisplayLight-$Version-win-x64.zip"
-$archivePath = Join-Path $releaseDirectory $archiveName
-$checksumPath = "$archivePath.sha256"
 
 Push-Location $repositoryRoot
 
 try {
     Remove-PackagingDirectory -Path $publishDirectory -ArtifactsRoot $artifactsRoot
+    if (-not $KeepReleaseDirectory) {
+        Remove-PackagingDirectory -Path $releaseDirectory -ArtifactsRoot $artifactsRoot
+    }
+
     New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null
     New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
-
-    Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $checksumPath -Force -ErrorAction SilentlyContinue
 
     if (-not $NoRestore) {
         dotnet restore ./src/DisplayLight.App/DisplayLight.App.csproj --runtime win-x64 --locked-mode
         Assert-LastExitCode 'dotnet restore'
+        dotnet tool restore
+        Assert-LastExitCode 'dotnet tool restore'
     }
 
     dotnet publish ./src/DisplayLight.App/DisplayLight.App.csproj `
@@ -71,17 +73,25 @@ try {
         -p:AssemblyVersion="$Version.0" `
         -p:FileVersion="$Version.0" `
         -p:InformationalVersion=$Version `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
         -p:DebugSymbols=false `
         -p:DebugType=None
     Assert-LastExitCode 'dotnet publish'
 
-    Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal
+    dotnet vpk pack `
+        --packId DisplayLight `
+        --packVersion $Version `
+        --packDir $publishDirectory `
+        --mainExe DisplayLight.App.exe `
+        --packAuthors zwnj `
+        --packTitle DisplayLight `
+        --runtime win-x64 `
+        --shortcuts StartMenuRoot `
+        --outputDir $releaseDirectory
+    Assert-LastExitCode 'vpk pack'
 
-    $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath $checksumPath -Value "$hash  $archiveName" -Encoding ascii
-
-    Write-Output "Archive: $archivePath"
-    Write-Output "SHA-256: $checksumPath"
+    Write-Output "Velopack releases: $releaseDirectory"
 }
 finally {
     Pop-Location

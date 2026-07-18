@@ -14,6 +14,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IDisplayOffService displayOffService;
     private readonly IPowerSourceProvider powerSourceProvider;
     private readonly IUserSettingsStore settingsStore;
+    private readonly IApplicationUpdateService? applicationUpdateService;
     private readonly DispatcherTimer powerSourceTimer;
     private readonly DispatcherTimer displayOffCountdownTimer;
     private readonly DisplayOffCountdown displayOffCountdown = new();
@@ -23,6 +24,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private readonly AsyncRelayCommand toggleSleepPreventionCommand;
     private readonly AsyncRelayCommand updateAcPowerOnlyCommand;
     private readonly AsyncRelayCommand toggleDisplayOffCountdownCommand;
+    private readonly AsyncRelayCommand checkForUpdatesCommand;
+    private readonly AsyncRelayCommand applyUpdateCommand;
 
     private UserSettings settings = new();
     private double selectedAcSliderValue = 2;
@@ -51,19 +54,25 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private string batteryErrorMessage = string.Empty;
     private string sleepErrorMessage = string.Empty;
     private PowerSource currentPowerSource = PowerSource.Unknown;
+    private string updateStatusText = string.Empty;
+    private bool isUpdateStatusVisible;
+    private bool isUpdateAvailable;
+    private bool isUpdateBusy;
 
     public MainWindowViewModel(
         IDisplayTimeoutService displayTimeoutService,
         ISleepPreventionService sleepPreventionService,
         IDisplayOffService displayOffService,
         IPowerSourceProvider powerSourceProvider,
-        IUserSettingsStore settingsStore)
+        IUserSettingsStore settingsStore,
+        IApplicationUpdateService? applicationUpdateService = null)
     {
         this.displayTimeoutService = displayTimeoutService;
         this.sleepPreventionService = sleepPreventionService;
         this.displayOffService = displayOffService;
         this.powerSourceProvider = powerSourceProvider;
         this.settingsStore = settingsStore;
+        this.applicationUpdateService = applicationUpdateService;
 
         applyAcCommand = new(() => ApplyTimeoutAsync(PowerSettingTarget.AcPower), () => !IsBusy);
         applyBatteryCommand = new(() => ApplyTimeoutAsync(PowerSettingTarget.Battery), () => !IsBusy);
@@ -73,6 +82,12 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         toggleDisplayOffCountdownCommand = new(
             ToggleDisplayOffCountdownAsync,
             () => displayOffCountdown.IsActive || !IsBusy);
+        checkForUpdatesCommand = new(
+            () => CheckForUpdatesAsync(showNoUpdateStatus: true),
+            () => applicationUpdateService is not null && !IsUpdateBusy);
+        applyUpdateCommand = new(
+            DownloadUpdateAsync,
+            () => applicationUpdateService is not null && IsUpdateAvailable && !IsUpdateBusy);
 
         powerSourceTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -88,6 +103,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     public event EventHandler? DisplayOffRequested;
 
+    public event EventHandler? UpdateReadyToApply;
+
     public ICommand ApplyAcCommand => applyAcCommand;
 
     public ICommand ApplyBatteryCommand => applyBatteryCommand;
@@ -99,6 +116,49 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     public ICommand UpdateAcPowerOnlyCommand => updateAcPowerOnlyCommand;
 
     public ICommand ToggleDisplayOffCountdownCommand => toggleDisplayOffCountdownCommand;
+
+    public ICommand CheckForUpdatesCommand => checkForUpdatesCommand;
+
+    public ICommand ApplyUpdateCommand => applyUpdateCommand;
+
+    public string CurrentVersionText => applicationUpdateService?.CurrentVersionText ?? "v?";
+
+    public string UpdateStatusText
+    {
+        get => updateStatusText;
+        private set => SetProperty(ref updateStatusText, value);
+    }
+
+    public bool IsUpdateStatusVisible
+    {
+        get => isUpdateStatusVisible;
+        private set => SetProperty(ref isUpdateStatusVisible, value);
+    }
+
+    public bool IsUpdateAvailable
+    {
+        get => isUpdateAvailable;
+        private set
+        {
+            if (SetProperty(ref isUpdateAvailable, value))
+            {
+                applyUpdateCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsUpdateBusy
+    {
+        get => isUpdateBusy;
+        private set
+        {
+            if (SetProperty(ref isUpdateBusy, value))
+            {
+                checkForUpdatesCommand.NotifyCanExecuteChanged();
+                applyUpdateCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
 
     public double SelectedAcSliderValue
     {
@@ -382,6 +442,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         powerSourceTimer.Start();
     }
 
+    public Task CheckForUpdatesSilentlyAsync() => CheckForUpdatesAsync(showNoUpdateStatus: false);
+
     public void HandleSystemResume()
     {
         if (!IsSleepPreventionActive)
@@ -535,6 +597,74 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             DisplayOffErrorMessage = FormatError(exception);
+        }
+    }
+
+    private async Task CheckForUpdatesAsync(bool showNoUpdateStatus)
+    {
+        if (applicationUpdateService is null || IsUpdateBusy)
+        {
+            return;
+        }
+
+        IsUpdateBusy = true;
+        try
+        {
+            ApplicationUpdateCheckResult result = await applicationUpdateService.CheckAsync();
+            IsUpdateAvailable = result.IsUpdateAvailable;
+            if (!result.IsInstalled)
+            {
+                IsUpdateStatusVisible = showNoUpdateStatus;
+                UpdateStatusText = "自動更新はインストール版で利用できます";
+            }
+            else if (result.IsUpdateAvailable)
+            {
+                IsUpdateStatusVisible = true;
+                UpdateStatusText = $"DisplayLight {result.AvailableVersion}を利用できます";
+            }
+            else
+            {
+                IsUpdateStatusVisible = showNoUpdateStatus;
+                UpdateStatusText = "DisplayLightは最新版です";
+            }
+        }
+        catch (Exception exception)
+        {
+            IsUpdateAvailable = false;
+            IsUpdateStatusVisible = showNoUpdateStatus;
+            UpdateStatusText = showNoUpdateStatus
+                ? $"更新を確認できませんでした：{exception.Message}"
+                : string.Empty;
+        }
+        finally
+        {
+            IsUpdateBusy = false;
+        }
+    }
+
+    private async Task DownloadUpdateAsync()
+    {
+        if (applicationUpdateService is null || !IsUpdateAvailable || IsUpdateBusy)
+        {
+            return;
+        }
+
+        IsUpdateBusy = true;
+        try
+        {
+            Progress<int> progress = new(value =>
+                UpdateStatusText = $"更新をダウンロードしています（{value}%）");
+            await applicationUpdateService.DownloadAsync(progress);
+            UpdateStatusText = "更新を適用して再起動します";
+            UpdateReadyToApply?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusText = $"更新をダウンロードできませんでした：{exception.Message}";
+        }
+        finally
+        {
+            IsUpdateBusy = false;
         }
     }
 

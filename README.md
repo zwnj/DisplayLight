@@ -13,6 +13,7 @@ MVPはCodex連携の手前までを対象とし、電源操作は利用者が画
 - 3秒のキャンセル可能なカウントダウン後に、接続中のディスプレイをオフにする。
 - 通知領域から小型コントロールセンターを開き、再読込みと終了を行う。
 - 二回目の起動で既存ウィンドウを表示する。
+- インストール版では安定版の更新を確認し、承認後に更新して再起動する。
 
 ディスプレイ消灯時間はWindowsの通常設定として残り、アプリ終了時には戻りません。
 手動スリープ防止はプロセス内だけで保持し、解除、エラー、アプリ終了時に解放します。
@@ -20,17 +21,22 @@ Codex Hook、複数セッション、自動スリープはAgent Preview以降の
 
 ## ダウンロードと実行
 
-GitHub Releasesから`DisplayLight-<version>-win-x64.zip`をダウンロードし、任意のフォルダーへ展開します。
-展開後の`DisplayLight.App.exe`を実行すると、通知領域へ常駐します。
+GitHub Releasesから`DisplayLight-win-Setup.exe`をダウンロードして実行します。
+インストール後は、起動から20秒後に安定版の更新を確認し、更新がある場合だけフライアウトへ通知します。
+右上の「その他の操作」から手動で「更新を確認」することもできます。
+更新のダウンロードと再起動は「更新して再起動」を押すまで始まりません。
+
+インストールせず試す場合は`DisplayLight-win-Portable.zip`を展開して実行できます。
+Portable版ではアプリ内更新を利用できません。
 
 配布ZIPは.NETランタイムを含むため、利用者が.NET SDKまたはランタイムを別途インストールする必要はありません。
 対象環境はWindows 11 x64です。
 
 0.1系にはコード署名がないため、Windows SmartScreenが発行元不明の警告を表示する可能性があります。
-Releaseに添付された`.sha256`とダウンロードしたZIPのSHA-256を照合してから実行してください。
+GitHubのArtifact Attestationを使って配布物の来歴を確認できます。
 
 ```powershell
-Get-FileHash ./DisplayLight-0.1.0-win-x64.zip -Algorithm SHA256
+gh attestation verify ./DisplayLight-win-Setup.exe --repo zwnj/DisplayLight
 ```
 
 ## 開発環境
@@ -86,14 +92,15 @@ dotnet test DisplayLight.slnx --configuration Release --no-build --no-restore
 - Modern Standbyのバッテリー動作では、OSの制約によりスリープ防止を長時間保証できません。
 - 利用者が電源ボタン、蓋、スタートメニューから開始したスリープは妨げません。
 - タスクバー四辺、複数DPI、ダークテーマ、高コントラスト、Explorer再起動後の通知領域表示は実機確認が残っています。
-- インストーラー、自動起動、署名、自動更新は未実装です。
+- 自動起動とコード署名は未実装です。
+- v0.1.1以前のZIP利用者は、自動更新を利用するために一度Setupを手動で導入する必要があります。
 
 ## 設計資料
 
 - [`DESIGN.md`](./DESIGN.md)：MVP境界、アーキテクチャ、安全性、状態モデル。
 - [`docs/OPEN_QUESTIONS.md`](./docs/OPEN_QUESTIONS.md)：確定した判断と後続フェーズの未決事項。
 - [`docs/TESTING.md`](./docs/TESTING.md)：自動検証と実機確認の分離。
-- [`docs/RELEASING.md`](./docs/RELEASING.md)：自己完結型ZIPとGitHub Releaseの作成手順。
+- [`docs/RELEASING.md`](./docs/RELEASING.md)：VelopackのSetupとGitHub Releaseの作成手順。
 - [`docs/adr`](./docs/adr)：採用した技術判断の履歴。
 - [`docs/plans/2026-07-15-mvp.md`](./docs/plans/2026-07-15-mvp.md)：MVP実装の実行記録。
 - [`PLANS.md`](./PLANS.md)：長い実装作業で使う実行計画の書式。

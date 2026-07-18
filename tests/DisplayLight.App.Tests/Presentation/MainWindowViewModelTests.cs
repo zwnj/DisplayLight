@@ -307,6 +307,81 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.HasBatteryError);
     }
 
+    [Fact]
+    public async Task SilentUpdateCheckShowsOnlyAvailableUpdate()
+    {
+        FakeApplicationUpdateService updateService = new()
+        {
+            CheckResult = new ApplicationUpdateCheckResult(true, true, "0.1.2"),
+        };
+        using MainWindowViewModel viewModel = CreateViewModel(updateService);
+
+        await viewModel.CheckForUpdatesSilentlyAsync();
+
+        Assert.True(viewModel.IsUpdateStatusVisible);
+        Assert.True(viewModel.IsUpdateAvailable);
+        Assert.Equal("DisplayLight 0.1.2を利用できます", viewModel.UpdateStatusText);
+    }
+
+    [Fact]
+    public async Task SilentUpdateCheckKeepsLatestStatusHidden()
+    {
+        FakeApplicationUpdateService updateService = new()
+        {
+            CheckResult = new ApplicationUpdateCheckResult(true, false, null),
+        };
+        using MainWindowViewModel viewModel = CreateViewModel(updateService);
+
+        await viewModel.CheckForUpdatesSilentlyAsync();
+
+        Assert.False(viewModel.IsUpdateStatusVisible);
+        Assert.False(viewModel.IsUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task ManualUpdateCheckExplainsPortableMode()
+    {
+        FakeApplicationUpdateService updateService = new()
+        {
+            CheckResult = new ApplicationUpdateCheckResult(false, false, null),
+        };
+        using MainWindowViewModel viewModel = CreateViewModel(updateService);
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.CheckForUpdatesCommand);
+
+        await command.ExecuteAsync();
+
+        Assert.True(viewModel.IsUpdateStatusVisible);
+        Assert.Equal("自動更新はインストール版で利用できます", viewModel.UpdateStatusText);
+    }
+
+    [Fact]
+    public async Task ApplyingAvailableUpdateDownloadsBeforeRequestingRestart()
+    {
+        FakeApplicationUpdateService updateService = new()
+        {
+            CheckResult = new ApplicationUpdateCheckResult(true, true, "0.1.2"),
+        };
+        using MainWindowViewModel viewModel = CreateViewModel(updateService);
+        await viewModel.CheckForUpdatesSilentlyAsync();
+        int restartRequestCount = 0;
+        viewModel.UpdateReadyToApply += (_, _) => restartRequestCount++;
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyUpdateCommand);
+
+        await command.ExecuteAsync();
+
+        Assert.Equal(1, updateService.DownloadCount);
+        Assert.Equal(1, restartRequestCount);
+        Assert.Equal("更新を適用して再起動します", viewModel.UpdateStatusText);
+    }
+
+    private static MainWindowViewModel CreateViewModel(IApplicationUpdateService updateService) => new(
+        new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+        new FakeSleepPreventionService(),
+        new FakeDisplayOffService(),
+        new FakePowerSourceProvider(PowerSource.AcPower),
+        new FakeSettingsStore(new UserSettings()),
+        updateService);
+
     private sealed class FakeDisplayTimeoutService(DisplayTimeoutValues values) : IDisplayTimeoutService
     {
         private DisplayTimeoutValues values = values;
@@ -406,5 +481,29 @@ public sealed class MainWindowViewModelTests
 
         public Task SaveAsync(UserSettings settings, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
+    }
+
+    private sealed class FakeApplicationUpdateService : IApplicationUpdateService
+    {
+        public string CurrentVersionText => "v0.1.1";
+
+        public ApplicationUpdateCheckResult CheckResult { get; init; } =
+            new(true, false, null);
+
+        public int DownloadCount { get; private set; }
+
+        public Task<ApplicationUpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(CheckResult);
+
+        public Task DownloadAsync(IProgress<int> progress, CancellationToken cancellationToken = default)
+        {
+            DownloadCount++;
+            progress.Report(100);
+            return Task.CompletedTask;
+        }
+
+        public void ApplyAndRestart()
+        {
+        }
     }
 }

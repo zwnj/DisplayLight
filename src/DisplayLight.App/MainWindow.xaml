@@ -386,7 +386,10 @@
                             Click="MoreButton_Click">
                         <Button.ContextMenu>
                             <ContextMenu Opened="AuxiliaryMenu_Opened" Closed="AuxiliaryMenu_Closed">
-                                <MenuItem Header="最新の状態に更新" Command="{Binding RefreshCommand}" />
+                                <MenuItem Header="電源設定を再読み込み" Command="{Binding RefreshCommand}" />
+                                <MenuItem Header="更新を確認" Command="{Binding CheckForUpdatesCommand}" />
+                                <Separator />
+                                <MenuItem Header="{Binding CurrentVersionText}" IsEnabled="False" />
                                 <Separator />
                                 <MenuItem Header="DisplayLightを終了" Click="ExitMenuItem_Click" />
                             </ContextMenu>
@@ -404,6 +407,31 @@
                                Foreground="{DynamicResource ErrorBrush}"
                                TextWrapping="Wrap"
                                AutomationProperties.LiveSetting="Assertive" />
+                </Border>
+
+                <Border Margin="0,6,0,0"
+                        Padding="10,8"
+                        CornerRadius="9"
+                        Background="{DynamicResource HoverBrush}"
+                        Visibility="{Binding IsUpdateStatusVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding UpdateStatusText}"
+                                   Margin="0,0,8,0"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                        <Button Grid.Column="1"
+                                Content="更新して再起動"
+                                Command="{Binding ApplyUpdateCommand}"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="更新をダウンロードしてDisplayLightを再起動" />
+                    </Grid>
                 </Border>
 
                 <Border Margin="0,8,0,0"

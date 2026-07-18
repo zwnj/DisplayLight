@@ -97,11 +97,18 @@
       "displaylight.app": {
         "type": "Project",
         "dependencies": {
-          "DisplayLight.Core": "[0.1.1, )"
+          "DisplayLight.Core": "[0.1.1, )",
+          "Velopack": "[1.2.0, )"
         }
       },
       "displaylight.core": {
         "type": "Project"
+      },
+      "Velopack": {
+        "type": "CentralTransitive",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "Rz67gJL619fSBS6omaSINUxyDuwhIxkm5mmubf7uLd5Qgi6LLKaKCha+QFP6n+Bw/UjA0vutnH4JQfYzn6ANtw=="
       }
     }
   }

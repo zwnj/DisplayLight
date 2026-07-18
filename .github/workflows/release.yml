@@ -49,26 +49,41 @@ jobs:
         shell: pwsh
         run: ./scripts/verify.ps1
 
-      - name: Package self-contained application
+      - name: Restore Velopack tool
         shell: pwsh
-        run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}'
+        run: dotnet tool restore
+
+      - name: Download previous Velopack release
+        shell: pwsh
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dotnet vpk download github `
+              --repoUrl "https://github.com/${{ github.repository }}" `
+              --token $env:GH_TOKEN `
+              --outputDir artifacts/release
+
+      - name: Package self-contained installer
+        shell: pwsh
+        run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}' -KeepReleaseDirectory
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
         with:
           name: DisplayLight-${{ steps.version.outputs.version }}-win-x64
-          path: |
-            artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip
-            artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip.sha256
+          path: artifacts/release
           if-no-files-found: error
           retention-days: 14
 
-      - name: Attest release archive
+      - name: Attest installer and portable archive
         uses: actions/attest-build-provenance@v3
         with:
-          subject-path: artifacts/release/DisplayLight-${{ steps.version.outputs.version }}-win-x64.zip
+          subject-path: |
+            artifacts/release/*-Setup.exe
+            artifacts/release/*-Portable.zip
 
-      - name: Create GitHub release
+      - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,18 +93,20 @@ jobs:
           $notes = @"
           ## ダウンロード
 
-          ``DisplayLight-$env:RELEASE_VERSION-win-x64.zip``を展開し、``DisplayLight.App.exe``を実行してください。
-          .NETランタイムの追加インストールは不要です。
+          通常は``DisplayLight-win-Setup.exe``を使用してください。インストール版では次回以降の更新をアプリ内から適用できます。
+          インストールせず試す場合は``DisplayLight-win-Portable.zip``を使用できますが、自動更新は利用できません。
+          どちらも.NETランタイムの追加インストールは不要です。
 
           > [!WARNING]
-          > このリリースはコード署名されていません。添付された``.sha256``でZIPのSHA-256を確認してください。
+          > このリリースはコード署名されていないため、Windows SmartScreenが警告を表示する可能性があります。
           "@
 
-          gh release create $env:RELEASE_TAG `
-              "artifacts/release/DisplayLight-$env:RELEASE_VERSION-win-x64.zip" `
-              "artifacts/release/DisplayLight-$env:RELEASE_VERSION-win-x64.zip.sha256" `
-              --verify-tag `
-              --fail-on-no-commits `
-              --generate-notes `
-              --notes $notes `
-              --title "DisplayLight $env:RELEASE_VERSION"
+          dotnet vpk upload github `
+              --repoUrl "https://github.com/${{ github.repository }}" `
+              --token $env:GH_TOKEN `
+              --outputDir artifacts/release `
+              --tag $env:RELEASE_TAG `
+              --releaseName "DisplayLight $env:RELEASE_VERSION" `
+              --publish
+
+          gh release edit $env:RELEASE_TAG --notes $notes

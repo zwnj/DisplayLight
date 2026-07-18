@@ -1,8 +1,10 @@
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using DisplayLight.App.Infrastructure.Settings;
 using DisplayLight.App.Infrastructure.SingleInstance;
 using DisplayLight.App.Infrastructure.Tray;
+using DisplayLight.App.Infrastructure.Updates;
 using DisplayLight.App.Infrastructure.Windows;
 using DisplayLight.App.Presentation;
 using DisplayLight.Core.Abstractions;
@@ -17,6 +19,8 @@ public partial class App : Application, IDisposable
     private MainWindow? mainWindow;
     private TrayIconService? trayIconService;
     private ApplicationThemeManager? themeManager;
+    private VelopackApplicationUpdateService? applicationUpdateService;
+    private DispatcherTimer? startupUpdateTimer;
     private bool isShuttingDown;
     private bool isCleanedUp;
 
@@ -46,6 +50,7 @@ public partial class App : Application, IDisposable
                     : new WindowInteropHelper(mainWindow).EnsureHandle());
             IPowerSourceProvider powerSourceProvider = new WindowsPowerSourceProvider();
             IUserSettingsStore settingsStore = new JsonUserSettingsStore();
+            applicationUpdateService = new VelopackApplicationUpdateService();
 
             themeManager = new ApplicationThemeManager(Resources);
 
@@ -54,7 +59,8 @@ public partial class App : Application, IDisposable
                 sleepPreventionService,
                 displayOffService,
                 powerSourceProvider,
-                settingsStore);
+                settingsStore,
+                applicationUpdateService);
             mainWindow = new MainWindow
             {
                 DataContext = viewModel,
@@ -62,6 +68,7 @@ public partial class App : Application, IDisposable
             MainWindow = mainWindow;
             mainWindow.ExitRequested += HandleExitRequested;
             mainWindow.FlyoutHidden += HandleFlyoutHidden;
+            viewModel.UpdateReadyToApply += HandleUpdateReadyToApply;
             themeManager.ThemeChanged += HandleThemeChanged;
             mainWindow.ApplyTheme(themeManager.UseLightTheme);
 
@@ -69,6 +76,13 @@ public partial class App : Application, IDisposable
             trayIconService.Initialize(mainWindow);
             ShowMainWindow();
             await viewModel.InitializeAsync();
+
+            startupUpdateTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromSeconds(20),
+            };
+            startupUpdateTimer.Tick += HandleStartupUpdateTimerTick;
+            startupUpdateTimer.Start();
         }
         catch (Exception exception)
         {
@@ -126,6 +140,39 @@ public partial class App : Application, IDisposable
 
     private void HandleExitRequested(object? sender, EventArgs e) => RequestShutdown();
 
+    private async void HandleStartupUpdateTimerTick(object? sender, EventArgs e)
+    {
+        startupUpdateTimer?.Stop();
+        if (viewModel is not null && !isShuttingDown)
+        {
+            await viewModel.CheckForUpdatesSilentlyAsync();
+        }
+    }
+
+    private void HandleUpdateReadyToApply(object? sender, EventArgs e)
+    {
+        if (isShuttingDown || applicationUpdateService is null)
+        {
+            return;
+        }
+
+        try
+        {
+            viewModel?.CancelDisplayOffCountdown();
+            // 更新プロセスへ引き渡す前にPower Requestを解除し、再起動失敗時にも保持し続けない。
+            sleepPreventionService?.SetActive(false);
+            applicationUpdateService.ApplyAndRestart();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                $"更新を適用できませんでした。\n\n{exception.Message}",
+                "DisplayLight",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private void RequestShutdown() => RequestShutdown(exitCode: 0);
 
     private void RequestShutdown(int exitCode)
@@ -149,6 +196,13 @@ public partial class App : Application, IDisposable
 
         isCleanedUp = true;
 
+        if (startupUpdateTimer is not null)
+        {
+            startupUpdateTimer.Stop();
+            startupUpdateTimer.Tick -= HandleStartupUpdateTimerTick;
+            startupUpdateTimer = null;
+        }
+
         TryCleanup(() => trayIconService?.Dispose());
         trayIconService = null;
 
@@ -160,8 +214,15 @@ public partial class App : Application, IDisposable
         TryCleanup(() => themeManager?.Dispose());
         themeManager = null;
 
+        if (viewModel is not null)
+        {
+            viewModel.UpdateReadyToApply -= HandleUpdateReadyToApply;
+        }
+
         TryCleanup(() => viewModel?.Dispose());
         viewModel = null;
+
+        applicationUpdateService = null;
 
         TryCleanup(() => sleepPreventionService?.Dispose());
         sleepPreventionService = null;

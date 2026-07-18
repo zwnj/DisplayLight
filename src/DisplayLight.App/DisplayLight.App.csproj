@@ -2,6 +2,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DisplayLight.Core\DisplayLight.Core.csproj" />
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -11,6 +17,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64</Platforms>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <StartupObject>DisplayLight.App.Program</StartupObject>
   </PropertyGroup>
 
 </Project>
