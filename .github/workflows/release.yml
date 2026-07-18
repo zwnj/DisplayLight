@@ -51,7 +51,7 @@ jobs:
 
       - name: Package self-contained application
         shell: pwsh
-        run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}' -NoRestore
+        run: ./scripts/package.ps1 -Version '${{ steps.version.outputs.version }}'
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
