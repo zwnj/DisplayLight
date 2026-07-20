@@ -3,6 +3,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using DisplayLight.App.Infrastructure.Settings;
 using DisplayLight.App.Infrastructure.SingleInstance;
+using DisplayLight.App.Infrastructure.Startup;
 using DisplayLight.App.Infrastructure.Tray;
 using DisplayLight.App.Infrastructure.Updates;
 using DisplayLight.App.Infrastructure.Windows;
@@ -28,13 +29,18 @@ public partial class App : Application, IDisposable
     {
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        bool isStartupLaunch = ApplicationLaunchModeCalculator.IsStartupLaunch(e.Args);
 
         try
         {
             singleInstanceCoordinator = new SingleInstanceCoordinator(Dispatcher, ShowMainWindow);
             if (!singleInstanceCoordinator.IsPrimaryInstance)
             {
-                singleInstanceCoordinator.NotifyPrimaryInstance();
+                if (!isStartupLaunch)
+                {
+                    singleInstanceCoordinator.NotifyPrimaryInstance();
+                }
+
                 singleInstanceCoordinator.Dispose();
                 singleInstanceCoordinator = null;
                 Shutdown();
@@ -51,6 +57,9 @@ public partial class App : Application, IDisposable
             IPowerSourceProvider powerSourceProvider = new WindowsPowerSourceProvider();
             IUserSettingsStore settingsStore = new JsonUserSettingsStore();
             applicationUpdateService = new VelopackApplicationUpdateService();
+            _ = StartupRegistrationService
+                .CreateForCurrentInstallation()
+                .TryEnsureRegistered();
 
             themeManager = new ApplicationThemeManager(Resources);
 
@@ -74,7 +83,11 @@ public partial class App : Application, IDisposable
 
             trayIconService = new TrayIconService(viewModel, ToggleMainWindow, RequestShutdown);
             trayIconService.Initialize(mainWindow);
-            ShowMainWindow();
+            if (!isStartupLaunch)
+            {
+                ShowMainWindow();
+            }
+
             await viewModel.InitializeAsync();
 
             startupUpdateTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -86,11 +99,15 @@ public partial class App : Application, IDisposable
         }
         catch (Exception exception)
         {
-            MessageBox.Show(
-                $"DisplayLightを起動できませんでした。\n\n{exception.Message}",
-                "DisplayLight",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            if (!isStartupLaunch)
+            {
+                MessageBox.Show(
+                    $"DisplayLightを起動できませんでした。\n\n{exception.Message}",
+                    "DisplayLight",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+
             RequestShutdown(exitCode: 1);
         }
     }
