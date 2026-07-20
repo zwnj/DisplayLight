@@ -650,20 +650,29 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         IsUpdateBusy = true;
+        bool downloadFinished = false;
         try
         {
             Progress<int> progress = new(value =>
-                UpdateStatusText = $"更新をダウンロードしています（{value}%）");
+            {
+                if (!downloadFinished)
+                {
+                    UpdateStatusText = $"更新をダウンロードしています（{value}%）";
+                }
+            });
             await applicationUpdateService.DownloadAsync(progress);
+            downloadFinished = true;
             UpdateStatusText = "更新を適用して再起動します";
             UpdateReadyToApply?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception exception)
         {
+            downloadFinished = true;
             UpdateStatusText = $"更新をダウンロードできませんでした：{exception.Message}";
         }
         finally
         {
+            downloadFinished = true;
             IsUpdateBusy = false;
         }
     }
