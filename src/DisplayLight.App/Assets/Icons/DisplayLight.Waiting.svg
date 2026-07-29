@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">DisplayLight AC電源接続待ち</title>
+  <g fill="#0E7490">
+    <rect x="8" y="8" width="240" height="184" rx="29" />
+    <rect x="110" y="187" width="36" height="38" />
+    <rect x="70" y="218" width="116" height="26" rx="13" />
+  </g>
+  <rect x="21" y="21" width="214" height="158" rx="20" fill="none" stroke="#FFFFFF" stroke-width="9" />
+  <path d="M66 102 Q84 118 102 102" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />
+  <path d="M154 102 Q172 118 190 102" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />
+</svg>

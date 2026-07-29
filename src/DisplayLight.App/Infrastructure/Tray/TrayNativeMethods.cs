@@ -13,8 +13,18 @@ internal static class TrayNativeMethods
     [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "RegisterWindowMessageW", SetLastError = true)]
     internal static extern uint RegisterWindowMessage(string message);
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "LoadIconW", SetLastError = true)]
-    internal static extern nint LoadIcon(nint instance, nint iconName);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "LoadImageW", SetLastError = true)]
+    internal static extern nint LoadImage(
+        nint instance,
+        string name,
+        uint type,
+        int desiredWidth,
+        int desiredHeight,
+        uint loadFlags);
+
+    [DllImport("user32.dll", EntryPoint = "DestroyIcon", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyIcon(nint icon);
 
     [DllImport("user32.dll", EntryPoint = "GetCursorPos", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

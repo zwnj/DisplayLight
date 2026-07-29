@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,17 +23,21 @@ internal sealed class TrayIconService : IDisposable
     private const uint WindowPowerBroadcast = 0x0218;
     private const uint PowerStatusChange = 0x000A;
     private const uint PowerResumeAutomatic = 0x0012;
-    private const int DefaultApplicationIcon = 32512;
+    private const uint ImageIcon = 1;
+    private const uint LoadFromFile = 0x00000010;
+    private const uint LoadDefaultSize = 0x00000040;
     private const int MaximumIconRestoreAttempts = 5;
 
     private readonly MainWindowViewModel viewModel;
     private readonly Action<TrayActivation> activateWindow;
     private readonly Action exitApplication;
     private readonly ContextMenu contextMenu;
+    private readonly Dictionary<TrayIconState, nint> iconHandles = [];
 
     private HwndSource? windowSource;
     private nint windowHandle;
     private nint iconHandle;
+    private TrayIconState iconState;
     private uint taskbarCreatedMessage;
     private bool isAdded;
     private bool isDisposed;
@@ -82,11 +87,9 @@ internal sealed class TrayIconService : IDisposable
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "TaskbarCreatedメッセージを登録できませんでした。");
         }
 
-        iconHandle = TrayNativeMethods.LoadIcon(nint.Zero, (nint)DefaultApplicationIcon);
-        if (iconHandle == nint.Zero)
-        {
-            throw new Win32Exception(Marshal.GetLastPInvokeError(), "通知領域アイコンを読み込めませんでした。");
-        }
+        LoadIcons();
+        iconState = GetIconState();
+        iconHandle = iconHandles[iconState];
 
         AddIcon();
         viewModel.PropertyChanged += HandleViewModelPropertyChanged;
@@ -115,6 +118,13 @@ internal sealed class TrayIconService : IDisposable
         windowSource?.RemoveHook(HandleWindowMessage);
         windowSource = null;
         windowHandle = nint.Zero;
+        foreach (nint loadedIconHandle in iconHandles.Values)
+        {
+            _ = TrayNativeMethods.DestroyIcon(loadedIconHandle);
+        }
+
+        iconHandles.Clear();
+        iconHandle = nint.Zero;
     }
 
     private void AddIcon()
@@ -141,16 +151,67 @@ internal sealed class TrayIconService : IDisposable
         }
     }
 
-    private void UpdateToolTip()
+    private void UpdateIconAndToolTip()
     {
         if (!isAdded)
         {
             return;
         }
 
-        NotifyIconData data = CreateData(NotifyIconFlags.Tip | NotifyIconFlags.ShowTip);
+        TrayIconState nextState = GetIconState();
+        bool iconChanged = nextState != iconState;
+        if (iconChanged)
+        {
+            iconState = nextState;
+            iconHandle = iconHandles[iconState];
+        }
+
+        NotifyIconFlags flags = NotifyIconFlags.Tip | NotifyIconFlags.ShowTip;
+        if (iconChanged)
+        {
+            flags |= NotifyIconFlags.Icon;
+        }
+
+        NotifyIconData data = CreateData(flags);
         _ = TrayNativeMethods.ShellNotifyIcon(NotifyIconMessage.Modify, ref data);
     }
+
+    private void LoadIcons()
+    {
+        LoadIcon(TrayIconState.Normal, "DisplayLight.Normal.ico");
+        LoadIcon(TrayIconState.SleepPreventionActive, "DisplayLight.Active.ico");
+        LoadIcon(TrayIconState.WaitingForAcPower, "DisplayLight.Waiting.ico");
+        LoadIcon(TrayIconState.Error, "DisplayLight.Error.ico");
+    }
+
+    private void LoadIcon(TrayIconState state, string fileName)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", fileName);
+        nint loadedIconHandle = TrayNativeMethods.LoadImage(
+            nint.Zero,
+            path,
+            ImageIcon,
+            desiredWidth: 0,
+            desiredHeight: 0,
+            LoadFromFile | LoadDefaultSize);
+        if (loadedIconHandle == nint.Zero)
+        {
+            throw new Win32Exception(
+                Marshal.GetLastPInvokeError(),
+                $"通知領域アイコンを読み込めませんでした：{fileName}");
+        }
+
+        iconHandles.Add(state, loadedIconHandle);
+    }
+
+    private TrayIconState GetIconState() => TrayIconStateCalculator.Calculate(
+        viewModel.IsSleepPreventionRequested,
+        viewModel.IsSleepPreventionActive,
+        viewModel.HasAcError ||
+        viewModel.HasBatteryError ||
+        viewModel.HasSleepError ||
+        viewModel.HasGeneralError ||
+        viewModel.HasDisplayOffError);
 
     private NotifyIconData CreateData(NotifyIconFlags flags) => new()
     {
@@ -304,9 +365,14 @@ internal sealed class TrayIconService : IDisposable
     private void HandleViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(MainWindowViewModel.IsSleepPreventionActive)
-            or nameof(MainWindowViewModel.IsSleepPreventionRequested))
+            or nameof(MainWindowViewModel.IsSleepPreventionRequested)
+            or nameof(MainWindowViewModel.HasAcError)
+            or nameof(MainWindowViewModel.HasBatteryError)
+            or nameof(MainWindowViewModel.HasSleepError)
+            or nameof(MainWindowViewModel.HasGeneralError)
+            or nameof(MainWindowViewModel.HasDisplayOffError))
         {
-            UpdateToolTip();
+            UpdateIconAndToolTip();
         }
     }
 

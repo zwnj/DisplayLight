@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">DisplayLight スリープ防止中</title>
+  <g fill="#0E7490">
+    <rect x="8" y="8" width="240" height="184" rx="29" />
+    <rect x="110" y="187" width="36" height="38" />
+    <rect x="70" y="218" width="116" height="26" rx="13" />
+  </g>
+  <rect x="21" y="21" width="214" height="158" rx="20" fill="none" stroke="#FFFFFF" stroke-width="9" />
+  <ellipse cx="84" cy="103" rx="12" ry="22" fill="#FFFFFF" />
+  <ellipse cx="172" cy="103" rx="12" ry="22" fill="#FFFFFF" />
+</svg>
