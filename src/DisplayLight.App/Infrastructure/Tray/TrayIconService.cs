@@ -186,22 +186,57 @@ internal sealed class TrayIconService : IDisposable
 
     private void LoadIcon(TrayIconState state, string fileName)
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "Assets", "Icons", fileName);
-        nint loadedIconHandle = TrayNativeMethods.LoadImage(
-            nint.Zero,
-            path,
-            ImageIcon,
-            desiredWidth: 0,
-            desiredHeight: 0,
-            LoadFromFile | LoadDefaultSize);
-        if (loadedIconHandle == nint.Zero)
-        {
-            throw new Win32Exception(
-                Marshal.GetLastPInvokeError(),
-                $"通知領域アイコンを読み込めませんでした：{fileName}");
-        }
+        using Stream iconStream = TrayIconResource.Open(fileName);
+        string temporaryPath = Path.Combine(
+            Path.GetTempPath(),
+            $"DisplayLight-{Guid.NewGuid():N}.ico");
 
-        iconHandles.Add(state, loadedIconHandle);
+        try
+        {
+            using (FileStream temporaryFile = new(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.Read))
+            {
+                iconStream.CopyTo(temporaryFile);
+            }
+
+            nint loadedIconHandle = TrayNativeMethods.LoadImage(
+                nint.Zero,
+                temporaryPath,
+                ImageIcon,
+                desiredWidth: 0,
+                desiredHeight: 0,
+                LoadFromFile | LoadDefaultSize);
+            if (loadedIconHandle == nint.Zero)
+            {
+                int errorCode = Marshal.GetLastPInvokeError();
+                throw new Win32Exception(
+                    errorCode,
+                    $"通知領域アイコンを読み込めませんでした：{fileName}");
+            }
+
+            iconHandles.Add(state, loadedIconHandle);
+        }
+        finally
+        {
+            TryDeleteTemporaryIcon(temporaryPath);
+        }
+    }
+
+    private static void TryDeleteTemporaryIcon(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private TrayIconState GetIconState() => TrayIconStateCalculator.Calculate(

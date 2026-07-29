@@ -8,9 +8,7 @@
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
     <Page Include="App.xaml" />
-    <Content Include="Assets\Icons\DisplayLight.*.ico"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets\Icons\DisplayLight.*.ico" />
   </ItemGroup>
 
   <PropertyGroup>
