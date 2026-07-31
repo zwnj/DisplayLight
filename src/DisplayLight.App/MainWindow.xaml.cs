@@ -718,7 +718,7 @@ public partial class MainWindow : Window
         await HideFlyoutAsync();
         if (!IsVisible)
         {
-            viewModel.TurnOffDisplay();
+            await viewModel.TurnOffDisplayAsync();
         }
     }
 

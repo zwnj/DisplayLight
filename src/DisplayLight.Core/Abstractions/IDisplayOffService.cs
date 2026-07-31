@@ -5,5 +5,5 @@ namespace DisplayLight.Core.Abstractions;
 /// </summary>
 public interface IDisplayOffService
 {
-    void TurnOff();
+    Task TurnOffAsync(CancellationToken cancellationToken = default);
 }

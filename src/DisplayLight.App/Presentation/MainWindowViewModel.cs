@@ -9,7 +9,7 @@ namespace DisplayLight.App.Presentation;
 
 internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 {
-    private readonly IDisplayTimeoutService displayTimeoutService;
+    private readonly IIdleTimeoutService idleTimeoutService;
     private readonly ISleepPreventionService sleepPreventionService;
     private readonly IDisplayOffService displayOffService;
     private readonly IPowerSourceProvider powerSourceProvider;
@@ -30,10 +30,14 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private UserSettings settings = new();
     private double selectedAcSliderValue = 2;
     private double selectedBatterySliderValue = 2;
+    private double selectedAcSleepSliderValue = 2;
+    private double selectedBatterySleepSliderValue = 2;
     private string currentAcText = "読み込み中";
     private string currentBatteryText = "読み込み中";
     private string selectedAcText = "10分";
     private string selectedBatteryText = "10分";
+    private string selectedAcSleepText = "15分後";
+    private string selectedBatterySleepText = "15分後";
     private string powerSourceText = "確認中";
     private string sleepPreventionStatusText = "無効";
     private string generalErrorMessage = string.Empty;
@@ -45,6 +49,10 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool isDisposed;
     private int? currentAcPresetIndex;
     private int? currentBatteryPresetIndex;
+    private int? currentAcSleepPresetIndex;
+    private int? currentBatterySleepPresetIndex;
+    private IdleTimeoutInterpretation? currentAcInterpretation;
+    private IdleTimeoutInterpretation? currentBatteryInterpretation;
     private PowerSettingTarget? expandedTarget = PowerSettingTarget.AcPower;
     private bool hasInitializedExpansion;
     private bool isUpdatingSelection;
@@ -60,14 +68,14 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool isUpdateBusy;
 
     public MainWindowViewModel(
-        IDisplayTimeoutService displayTimeoutService,
+        IIdleTimeoutService idleTimeoutService,
         ISleepPreventionService sleepPreventionService,
         IDisplayOffService displayOffService,
         IPowerSourceProvider powerSourceProvider,
         IUserSettingsStore settingsStore,
         IApplicationUpdateService? applicationUpdateService = null)
     {
-        this.displayTimeoutService = displayTimeoutService;
+        this.idleTimeoutService = idleTimeoutService;
         this.sleepPreventionService = sleepPreventionService;
         this.displayOffService = displayOffService;
         this.powerSourceProvider = powerSourceProvider;
@@ -175,8 +183,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
                 SelectedAcText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedAcPresetIndex));
-                OnPropertyChanged(nameof(HasPendingAcChange));
-                OnPropertyChanged(nameof(AcSelectionCaption));
+                NotifyAcSelectionDetailsChanged();
             }
         }
     }
@@ -196,8 +203,45 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
                 SelectedBatteryText = PresetPresentation.GetLabel(GetPreset(normalized));
                 OnPropertyChanged(nameof(SelectedBatteryPresetIndex));
-                OnPropertyChanged(nameof(HasPendingBatteryChange));
-                OnPropertyChanged(nameof(BatterySelectionCaption));
+                NotifyBatterySelectionDetailsChanged();
+            }
+        }
+    }
+
+    public double SelectedAcSleepSliderValue
+    {
+        get => selectedAcSleepSliderValue;
+        set
+        {
+            double normalized = NormalizeSleepSliderValue(value);
+            if (SetProperty(ref selectedAcSleepSliderValue, normalized))
+            {
+                if (!isUpdatingSelection)
+                {
+                    hasAcSelectionChanged = true;
+                }
+
+                SelectedAcSleepText = PresetPresentation.GetLabel(GetSleepDelayPreset(normalized));
+                NotifyAcSelectionDetailsChanged();
+            }
+        }
+    }
+
+    public double SelectedBatterySleepSliderValue
+    {
+        get => selectedBatterySleepSliderValue;
+        set
+        {
+            double normalized = NormalizeSleepSliderValue(value);
+            if (SetProperty(ref selectedBatterySleepSliderValue, normalized))
+            {
+                if (!isUpdatingSelection)
+                {
+                    hasBatterySelectionChanged = true;
+                }
+
+                SelectedBatterySleepText = PresetPresentation.GetLabel(GetSleepDelayPreset(normalized));
+                NotifyBatterySelectionDetailsChanged();
             }
         }
     }
@@ -214,19 +258,65 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         set => SelectedBatterySliderValue = value;
     }
 
+    public int SelectedAcSleepPresetIndex
+    {
+        get => IsAcSleepDelayEnabled
+            ? (int)SelectedAcSleepSliderValue
+            : GetSleepSliderIndex(SleepDelayPreset.Never);
+        set
+        {
+            if (IsAcSleepDelayEnabled)
+            {
+                SelectedAcSleepSliderValue = value;
+            }
+        }
+    }
+
+    public int SelectedBatterySleepPresetIndex
+    {
+        get => IsBatterySleepDelayEnabled
+            ? (int)SelectedBatterySleepSliderValue
+            : GetSleepSliderIndex(SleepDelayPreset.Never);
+        set
+        {
+            if (IsBatterySleepDelayEnabled)
+            {
+                SelectedBatterySleepSliderValue = value;
+            }
+        }
+    }
+
+    public bool IsAcSleepDelayEnabled =>
+        GetPreset(SelectedAcSliderValue) != DisplayTimeoutPreset.Never;
+
+    public bool IsBatterySleepDelayEnabled =>
+        GetPreset(SelectedBatterySliderValue) != DisplayTimeoutPreset.Never;
+
     public bool HasPendingAcChange =>
-        hasAcSelectionChanged && currentAcPresetIndex != SelectedAcPresetIndex;
+        hasAcSelectionChanged &&
+        (currentAcPresetIndex != SelectedAcPresetIndex ||
+         currentAcSleepPresetIndex != SelectedAcSleepPresetIndex);
 
     public bool HasPendingBatteryChange =>
-        hasBatterySelectionChanged && currentBatteryPresetIndex != SelectedBatteryPresetIndex;
+        hasBatterySelectionChanged &&
+        (currentBatteryPresetIndex != SelectedBatteryPresetIndex ||
+         currentBatterySleepPresetIndex != SelectedBatterySleepPresetIndex);
 
-    public string AcSelectionCaption => GetSelectionCaption(HasPendingAcChange, currentAcPresetIndex);
+    public string AcSelectionCaption => GetSelectionCaption(
+        HasPendingAcChange,
+        currentAcInterpretation?.Kind == IdleTimeoutInterpretationKind.ExactPreset);
 
-    public string BatterySelectionCaption => GetSelectionCaption(HasPendingBatteryChange, currentBatteryPresetIndex);
+    public string BatterySelectionCaption => GetSelectionCaption(
+        HasPendingBatteryChange,
+        currentBatteryInterpretation?.Kind == IdleTimeoutInterpretationKind.ExactPreset);
 
     public int? CurrentAcPresetIndex => currentAcPresetIndex;
 
     public int? CurrentBatteryPresetIndex => currentBatteryPresetIndex;
+
+    public int? CurrentAcSleepPresetIndex => currentAcSleepPresetIndex;
+
+    public int? CurrentBatterySleepPresetIndex => currentBatterySleepPresetIndex;
 
     public bool IsAcExpanded => expandedTarget == PowerSettingTarget.AcPower;
 
@@ -294,6 +384,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(AcExpansionAutomationName));
                 OnPropertyChanged(nameof(CurrentAcDisplayText));
                 OnPropertyChanged(nameof(IsCurrentAcCustom));
+                OnPropertyChanged(nameof(IsCurrentAcIndividuallyConfigured));
             }
         }
     }
@@ -308,17 +399,26 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(BatteryExpansionAutomationName));
                 OnPropertyChanged(nameof(CurrentBatteryDisplayText));
                 OnPropertyChanged(nameof(IsCurrentBatteryCustom));
+                OnPropertyChanged(nameof(IsCurrentBatteryIndividuallyConfigured));
             }
         }
     }
 
-    public string CurrentAcDisplayText => RemoveCustomPresetSuffix(CurrentAcText);
+    public string CurrentAcDisplayText => RemoveCurrentStatusSuffix(CurrentAcText);
 
-    public string CurrentBatteryDisplayText => RemoveCustomPresetSuffix(CurrentBatteryText);
+    public string CurrentBatteryDisplayText => RemoveCurrentStatusSuffix(CurrentBatteryText);
 
-    public bool IsCurrentAcCustom => CurrentAcText.Contains("（プリセット外）", StringComparison.Ordinal);
+    public bool IsCurrentAcCustom =>
+        currentAcInterpretation?.Kind == IdleTimeoutInterpretationKind.Custom;
 
-    public bool IsCurrentBatteryCustom => CurrentBatteryText.Contains("（プリセット外）", StringComparison.Ordinal);
+    public bool IsCurrentBatteryCustom =>
+        currentBatteryInterpretation?.Kind == IdleTimeoutInterpretationKind.Custom;
+
+    public bool IsCurrentAcIndividuallyConfigured =>
+        currentAcInterpretation?.IsIndividuallyConfigured == true;
+
+    public bool IsCurrentBatteryIndividuallyConfigured =>
+        currentBatteryInterpretation?.IsIndividuallyConfigured == true;
 
     public string SelectedAcText
     {
@@ -331,6 +431,26 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         get => selectedBatteryText;
         private set => SetProperty(ref selectedBatteryText, value);
     }
+
+    public string SelectedAcSleepText
+    {
+        get => IsAcSleepDelayEnabled ? selectedAcSleepText : "スリープしない";
+        private set => SetProperty(ref selectedAcSleepText, value);
+    }
+
+    public string SelectedBatterySleepText
+    {
+        get => IsBatterySleepDelayEnabled ? selectedBatterySleepText : "スリープしない";
+        private set => SetProperty(ref selectedBatterySleepText, value);
+    }
+
+    public string SelectedAcSleepTotalText => FormatSelectedSleepTotal(
+        GetPreset(SelectedAcSliderValue),
+        GetEffectiveSleepDelay(PowerSettingTarget.AcPower));
+
+    public string SelectedBatterySleepTotalText => FormatSelectedSleepTotal(
+        GetPreset(SelectedBatterySliderValue),
+        GetEffectiveSleepDelay(PowerSettingTarget.Battery));
 
     public string PowerSourceText
     {
@@ -436,6 +556,8 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             SelectedAcSliderValue = GetSliderIndex(settings.SelectedAcTimeout);
             SelectedBatterySliderValue = GetSliderIndex(settings.SelectedBatteryTimeout);
+            SelectedAcSleepSliderValue = GetSleepSliderIndex(settings.SelectedAcSleepDelay);
+            SelectedBatterySleepSliderValue = GetSleepSliderIndex(settings.SelectedBatterySleepDelay);
         });
 
         await RefreshAsync();
@@ -504,25 +626,44 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         ClearTargetError(target);
         await RunBusyOperationAsync(async () =>
         {
-            DisplayTimeoutPreset preset = target == PowerSettingTarget.AcPower
+            DisplayTimeoutPreset displayPreset = target == PowerSettingTarget.AcPower
                 ? GetPreset(SelectedAcSliderValue)
                 : GetPreset(SelectedBatterySliderValue);
-            DisplayTimeoutValues values = await displayTimeoutService.SetAsync(target, preset);
+            SleepDelayPreset sleepDelay = GetEffectiveSleepDelay(target);
+            IdleTimeoutSelection selection = new(displayPreset, sleepDelay);
+            IdleTimeoutValues values = await idleTimeoutService.SetAsync(target, selection);
             ApplyCurrentValues(values, updateSlidersForExactValues: false);
 
             settings = target == PowerSettingTarget.AcPower
-                ? settings with { SelectedAcTimeout = preset }
-                : settings with { SelectedBatteryTimeout = preset };
+                ? settings with
+                {
+                    SelectedAcTimeout = displayPreset,
+                    SelectedAcSleepDelay = GetSleepDelayPreset(SelectedAcSleepSliderValue),
+                }
+                : settings with
+                {
+                    SelectedBatteryTimeout = displayPreset,
+                    SelectedBatterySleepDelay = GetSleepDelayPreset(SelectedBatterySleepSliderValue),
+                };
             await settingsStore.SaveAsync(settings);
             ClearSelectionChanged(target);
-        }, exception => SetTargetError(target, exception));
+        }, exception =>
+        {
+            if (exception is IdleTimeoutApplyException applyException &&
+                applyException.ActualValues is not null)
+            {
+                ApplyCurrentValues(applyException.ActualValues, updateSlidersForExactValues: false);
+            }
+
+            SetTargetError(target, exception);
+        });
     }
 
     private async Task RefreshAsync()
     {
         await RunBusyOperationAsync(async () =>
         {
-            DisplayTimeoutValues values = await displayTimeoutService.ReadAsync();
+            IdleTimeoutValues values = await idleTimeoutService.ReadAsync();
             ApplyCurrentValues(values, updateSlidersForExactValues: true);
             hasAcSelectionChanged = false;
             hasBatterySelectionChanged = false;
@@ -587,12 +728,12 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         DisplayOffRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    internal void TurnOffDisplay()
+    internal async Task TurnOffDisplayAsync()
     {
         DisplayOffErrorMessage = string.Empty;
         try
         {
-            displayOffService.TurnOff();
+            await displayOffService.TurnOffAsync();
         }
         catch (Exception exception)
         {
@@ -716,20 +857,34 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ApplyCurrentValues(DisplayTimeoutValues values, bool updateSlidersForExactValues)
+    private void ApplyCurrentValues(IdleTimeoutValues values, bool updateSlidersForExactValues)
     {
-        CurrentAcText = PresetPresentation.FormatCurrent(values.AcSeconds);
-        CurrentBatteryText = PresetPresentation.FormatCurrent(values.BatterySeconds);
+        currentAcInterpretation = IdleTimeoutPolicy.Interpret(
+            values.AcDisplaySeconds,
+            values.AcSleepSeconds);
+        currentBatteryInterpretation = IdleTimeoutPolicy.Interpret(
+            values.BatteryDisplaySeconds,
+            values.BatterySleepSeconds);
+        CurrentAcText = PresetPresentation.FormatCurrent(currentAcInterpretation);
+        CurrentBatteryText = PresetPresentation.FormatCurrent(currentBatteryInterpretation);
 
-        currentAcPresetIndex = DisplayTimeoutCatalog.TryFromSeconds(values.AcSeconds, out DisplayTimeoutPreset acPreset)
-            ? GetSliderIndex(acPreset)
+        currentAcPresetIndex = currentAcInterpretation.DisplayPreset != DisplayTimeoutPreset.Unknown
+            ? GetSliderIndex(currentAcInterpretation.DisplayPreset)
             : null;
-        currentBatteryPresetIndex = DisplayTimeoutCatalog.TryFromSeconds(values.BatterySeconds, out DisplayTimeoutPreset batteryPreset)
-            ? GetSliderIndex(batteryPreset)
+        currentBatteryPresetIndex = currentBatteryInterpretation.DisplayPreset != DisplayTimeoutPreset.Unknown
+            ? GetSliderIndex(currentBatteryInterpretation.DisplayPreset)
+            : null;
+        currentAcSleepPresetIndex = currentAcInterpretation.SleepDelayPreset != SleepDelayPreset.Unknown
+            ? GetSleepSliderIndex(currentAcInterpretation.SleepDelayPreset)
+            : null;
+        currentBatterySleepPresetIndex = currentBatteryInterpretation.SleepDelayPreset != SleepDelayPreset.Unknown
+            ? GetSleepSliderIndex(currentBatteryInterpretation.SleepDelayPreset)
             : null;
 
         OnPropertyChanged(nameof(CurrentAcPresetIndex));
         OnPropertyChanged(nameof(CurrentBatteryPresetIndex));
+        OnPropertyChanged(nameof(CurrentAcSleepPresetIndex));
+        OnPropertyChanged(nameof(CurrentBatterySleepPresetIndex));
 
         UpdateSelectionWithoutMarkingPending(() =>
         {
@@ -741,6 +896,20 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (updateSlidersForExactValues && currentBatteryPresetIndex is int batteryIndex)
             {
                 SelectedBatterySliderValue = batteryIndex;
+            }
+
+            if (updateSlidersForExactValues &&
+                currentAcSleepPresetIndex is int acSleepIndex &&
+                currentAcInterpretation.DisplayPreset != DisplayTimeoutPreset.Never)
+            {
+                SelectedAcSleepSliderValue = acSleepIndex;
+            }
+
+            if (updateSlidersForExactValues &&
+                currentBatterySleepPresetIndex is int batterySleepIndex &&
+                currentBatteryInterpretation.DisplayPreset != DisplayTimeoutPreset.Never)
+            {
+                SelectedBatterySleepSliderValue = batterySleepIndex;
             }
         });
 
@@ -850,9 +1019,26 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static string FormatError(Exception exception) => exception is Win32Exception win32Exception
-        ? $"{win32Exception.Message}（Windowsエラー {win32Exception.NativeErrorCode}）"
-        : exception.Message;
+    private static string FormatError(Exception exception)
+    {
+        Win32Exception? win32Exception = FindWin32Exception(exception);
+        return win32Exception is null
+            ? exception.Message
+            : $"{exception.Message}（Windowsエラー {win32Exception.NativeErrorCode}）";
+    }
+
+    private static Win32Exception? FindWin32Exception(Exception exception)
+    {
+        for (Exception? current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is Win32Exception win32Exception)
+            {
+                return win32Exception;
+            }
+        }
+
+        return null;
+    }
 
     private void NotifyCommandsChanged()
     {
@@ -867,8 +1053,14 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private static double NormalizeSliderValue(double value) =>
         Math.Clamp(Math.Round(value), 0, DisplayTimeoutCatalog.All.Count - 1);
 
+    private static double NormalizeSleepSliderValue(double value) =>
+        Math.Clamp(Math.Round(value), 0, SleepDelayCatalog.All.Count - 1);
+
     private static DisplayTimeoutPreset GetPreset(double sliderValue) =>
         DisplayTimeoutCatalog.All[(int)NormalizeSliderValue(sliderValue)];
+
+    private static SleepDelayPreset GetSleepDelayPreset(double sliderValue) =>
+        SleepDelayCatalog.All[(int)NormalizeSleepSliderValue(sliderValue)];
 
     private static int GetSliderIndex(DisplayTimeoutPreset preset)
     {
@@ -881,6 +1073,47 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         return 2;
+    }
+
+    private static int GetSleepSliderIndex(SleepDelayPreset preset)
+    {
+        for (int index = 0; index < SleepDelayCatalog.All.Count; index++)
+        {
+            if (SleepDelayCatalog.All[index] == preset)
+            {
+                return index;
+            }
+        }
+
+        return 2;
+    }
+
+    private SleepDelayPreset GetEffectiveSleepDelay(PowerSettingTarget target)
+    {
+        DisplayTimeoutPreset displayPreset = target == PowerSettingTarget.AcPower
+            ? GetPreset(SelectedAcSliderValue)
+            : GetPreset(SelectedBatterySliderValue);
+        if (displayPreset == DisplayTimeoutPreset.Never)
+        {
+            return SleepDelayPreset.Never;
+        }
+
+        return target == PowerSettingTarget.AcPower
+            ? GetSleepDelayPreset(SelectedAcSleepSliderValue)
+            : GetSleepDelayPreset(SelectedBatterySleepSliderValue);
+    }
+
+    private static string FormatSelectedSleepTotal(
+        DisplayTimeoutPreset displayPreset,
+        SleepDelayPreset sleepDelay)
+    {
+        if (displayPreset == DisplayTimeoutPreset.Never || sleepDelay == SleepDelayPreset.Never)
+        {
+            return "PCはスリープしません";
+        }
+
+        IdleTimeoutSelection selection = new(displayPreset, sleepDelay);
+        return $"操作がない状態で合計{PresetPresentation.FormatSeconds(selection.ToSleepTimeoutSeconds())}後";
     }
 
     private void UpdateSelectionWithoutMarkingPending(Action update)
@@ -918,10 +1151,30 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(BatterySelectionCaption));
     }
 
-    private static string RemoveCustomPresetSuffix(string value) =>
+    private void NotifyAcSelectionDetailsChanged()
+    {
+        OnPropertyChanged(nameof(SelectedAcSleepPresetIndex));
+        OnPropertyChanged(nameof(IsAcSleepDelayEnabled));
+        OnPropertyChanged(nameof(SelectedAcSleepText));
+        OnPropertyChanged(nameof(SelectedAcSleepTotalText));
+        OnPropertyChanged(nameof(HasPendingAcChange));
+        OnPropertyChanged(nameof(AcSelectionCaption));
+    }
+
+    private void NotifyBatterySelectionDetailsChanged()
+    {
+        OnPropertyChanged(nameof(SelectedBatterySleepPresetIndex));
+        OnPropertyChanged(nameof(IsBatterySleepDelayEnabled));
+        OnPropertyChanged(nameof(SelectedBatterySleepText));
+        OnPropertyChanged(nameof(SelectedBatterySleepTotalText));
+        OnPropertyChanged(nameof(HasPendingBatteryChange));
+        OnPropertyChanged(nameof(BatterySelectionCaption));
+    }
+
+    private static string RemoveCurrentStatusSuffix(string value) =>
         value.Replace("（プリセット外）", string.Empty, StringComparison.Ordinal);
 
-    private static string GetSelectionCaption(bool hasPendingChange, int? currentPresetIndex) =>
-        hasPendingChange ? "変更後" : currentPresetIndex is null ? "前回選択" : "現在";
+    private static string GetSelectionCaption(bool hasPendingChange, bool currentIsExactPreset) =>
+        hasPendingChange ? "変更後" : currentIsExactPreset ? "現在" : "前回選択";
 
 }

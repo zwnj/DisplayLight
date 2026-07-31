@@ -4,13 +4,21 @@ internal interface IPowerSchemeNativeApi
 {
     Guid GetActiveScheme();
 
-    uint ReadAcValue(Guid schemeGuid);
+    uint ReadAcDisplayValue(Guid schemeGuid);
 
-    uint ReadDcValue(Guid schemeGuid);
+    uint ReadDcDisplayValue(Guid schemeGuid);
 
-    void WriteAcValue(Guid schemeGuid, uint seconds);
+    uint ReadAcSleepValue(Guid schemeGuid);
 
-    void WriteDcValue(Guid schemeGuid, uint seconds);
+    uint ReadDcSleepValue(Guid schemeGuid);
+
+    void WriteAcDisplayValue(Guid schemeGuid, uint seconds);
+
+    void WriteDcDisplayValue(Guid schemeGuid, uint seconds);
+
+    void WriteAcSleepValue(Guid schemeGuid, uint seconds);
+
+    void WriteDcSleepValue(Guid schemeGuid, uint seconds);
 
     void Activate(Guid schemeGuid);
 }

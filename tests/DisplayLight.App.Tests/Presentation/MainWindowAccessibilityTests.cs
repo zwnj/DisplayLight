@@ -19,6 +19,16 @@ public sealed class MainWindowAccessibilityTests
         "無期限",
     ];
 
+    private static readonly string[] ExpectedSleepDelayNames =
+    [
+        "画面オフと同時",
+        "画面オフの5分後",
+        "画面オフの15分後",
+        "画面オフの30分後",
+        "画面オフの60分後",
+        "PCをスリープしない",
+    ];
+
     [Fact]
     public void MainWindowUsesFlyoutWindowAttributes()
     {
@@ -58,12 +68,20 @@ public sealed class MainWindowAccessibilityTests
             MainWindow window = new();
             try
             {
-                Assert.Equal("AC電源時の消灯時間", AutomationProperties.GetName(window.AcPresetList));
-                Assert.Equal("バッテリー時の消灯時間", AutomationProperties.GetName(window.BatteryPresetList));
+                Assert.Equal("AC電源時の画面オフ時間", AutomationProperties.GetName(window.AcPresetList));
+                Assert.Equal("バッテリー時の画面オフ時間", AutomationProperties.GetName(window.BatteryPresetList));
+                Assert.Equal(
+                    "AC電源時、画面オフからPCスリープまでの時間",
+                    AutomationProperties.GetName(window.AcSleepPresetList));
+                Assert.Equal(
+                    "バッテリー時、画面オフからPCスリープまでの時間",
+                    AutomationProperties.GetName(window.BatterySleepPresetList));
                 Assert.IsType<DiscretePresetListBox>(window.AcPresetList);
                 Assert.Equal(6, window.AcPresetList.AlternationCount);
                 Assert.Equal(ExpectedPresetNames, GetAutomationNames(window.AcPresetList));
                 Assert.Equal(ExpectedPresetNames, GetAutomationNames(window.BatteryPresetList));
+                Assert.Equal(ExpectedSleepDelayNames, GetAutomationNames(window.AcSleepPresetList));
+                Assert.Equal(ExpectedSleepDelayNames, GetAutomationNames(window.BatterySleepPresetList));
             }
             finally
             {

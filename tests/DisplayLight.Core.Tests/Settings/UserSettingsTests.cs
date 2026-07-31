@@ -13,6 +13,8 @@ public sealed class UserSettingsTests
             SchemaVersion = 999,
             SelectedAcTimeout = DisplayTimeoutPreset.Unknown,
             SelectedBatteryTimeout = (DisplayTimeoutPreset)999,
+            SelectedAcSleepDelay = SleepDelayPreset.Unknown,
+            SelectedBatterySleepDelay = (SleepDelayPreset)999,
             IsAcPowerOnly = true,
         };
 
@@ -21,6 +23,8 @@ public sealed class UserSettingsTests
         Assert.Equal(UserSettings.CurrentSchemaVersion, normalized.SchemaVersion);
         Assert.Equal(DisplayTimeoutPreset.TenMinutes, normalized.SelectedAcTimeout);
         Assert.Equal(DisplayTimeoutPreset.TenMinutes, normalized.SelectedBatteryTimeout);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, normalized.SelectedAcSleepDelay);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, normalized.SelectedBatterySleepDelay);
         Assert.True(normalized.IsAcPowerOnly);
     }
 }

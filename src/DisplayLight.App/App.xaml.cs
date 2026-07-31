@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Threading;
 using DisplayLight.App.Infrastructure.Settings;
 using DisplayLight.App.Infrastructure.SingleInstance;
@@ -16,6 +15,7 @@ public partial class App : Application, IDisposable
 {
     private SingleInstanceCoordinator? singleInstanceCoordinator;
     private WindowsSleepPreventionService? sleepPreventionService;
+    private WindowsDisplayOffService? displayOffService;
     private MainWindowViewModel? viewModel;
     private MainWindow? mainWindow;
     private TrayIconService? trayIconService;
@@ -48,13 +48,11 @@ public partial class App : Application, IDisposable
             }
 
             IPowerSchemeNativeApi powerSchemeApi = new PowerSchemeNativeApi();
-            IDisplayTimeoutService displayTimeoutService = new WindowsDisplayTimeoutService(powerSchemeApi);
+            IIdleTimeoutService idleTimeoutService = new WindowsIdleTimeoutService(powerSchemeApi);
             sleepPreventionService = new WindowsSleepPreventionService();
-            IDisplayOffService displayOffService = new WindowsDisplayOffService(() =>
-                mainWindow is null
-                    ? nint.Zero
-                    : new WindowInteropHelper(mainWindow).EnsureHandle());
             IPowerSourceProvider powerSourceProvider = new WindowsPowerSourceProvider();
+            displayOffService = new WindowsDisplayOffService(powerSchemeApi, powerSourceProvider);
+            displayOffService.RecoverPendingChange();
             IUserSettingsStore settingsStore = new JsonUserSettingsStore();
             applicationUpdateService = new VelopackApplicationUpdateService();
             _ = StartupRegistrationService
@@ -64,7 +62,7 @@ public partial class App : Application, IDisposable
             themeManager = new ApplicationThemeManager(Resources);
 
             viewModel = new MainWindowViewModel(
-                displayTimeoutService,
+                idleTimeoutService,
                 sleepPreventionService,
                 displayOffService,
                 powerSourceProvider,
@@ -240,6 +238,9 @@ public partial class App : Application, IDisposable
         viewModel = null;
 
         applicationUpdateService = null;
+
+        TryCleanup(() => displayOffService?.Dispose());
+        displayOffService = null;
 
         TryCleanup(() => sleepPreventionService?.Dispose());
         sleepPreventionService = null;

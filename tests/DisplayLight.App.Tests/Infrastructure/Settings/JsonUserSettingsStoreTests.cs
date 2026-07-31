@@ -31,6 +31,8 @@ public sealed class JsonUserSettingsStoreTests
         {
             SelectedAcTimeout = DisplayTimeoutPreset.SixtyMinutes,
             SelectedBatteryTimeout = DisplayTimeoutPreset.Never,
+            SelectedAcSleepDelay = SleepDelayPreset.ThirtyMinutes,
+            SelectedBatterySleepDelay = SleepDelayPreset.Never,
             IsAcPowerOnly = true,
         };
 
@@ -40,6 +42,34 @@ public sealed class JsonUserSettingsStoreTests
 
         Assert.Equal(second, loaded);
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*.tmp", SearchOption.TopDirectoryOnly));
+    }
+
+    [Fact]
+    public async Task LoadAsyncMigratesVersionOneWithDefaultSleepDelays()
+    {
+        using TestDirectory directory = new();
+        Directory.CreateDirectory(directory.Path);
+        await File.WriteAllTextAsync(
+            Path.Combine(directory.Path, "settings.json"),
+            """
+            {
+              "schemaVersion": 1,
+              "selectedAcTimeout": 5,
+              "selectedBatteryTimeout": 6,
+              "isAcPowerOnly": true
+            }
+            """,
+            CancellationToken.None);
+        JsonUserSettingsStore store = new(directory.Path);
+
+        UserSettings loaded = await store.LoadAsync(CancellationToken.None);
+
+        Assert.Equal(UserSettings.CurrentSchemaVersion, loaded.SchemaVersion);
+        Assert.Equal(DisplayTimeoutPreset.SixtyMinutes, loaded.SelectedAcTimeout);
+        Assert.Equal(DisplayTimeoutPreset.Never, loaded.SelectedBatteryTimeout);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, loaded.SelectedAcSleepDelay);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, loaded.SelectedBatterySleepDelay);
+        Assert.True(loaded.IsAcPowerOnly);
     }
 
     [Fact]

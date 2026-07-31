@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#11151c" media="(prefers-color-scheme: dark)">
+    <title>Modern Standby環境で画面を暗くし、ローカル処理を継続する方法</title>
+    <style>
+/* tokens.css */
+:root {
+    color-scheme: light;
+    --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Yu Gothic UI", "Noto Sans JP", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", monospace;
+    --font-size-body: 1rem;
+    --line-height-body: 1.75;
+    --content-width: 72ch;
+    --page-width: 1120px;
+    --space-1: 0.375rem;
+    --space-2: 0.75rem;
+    --space-3: 1rem;
+    --space-4: 1.5rem;
+    --space-5: 2.25rem;
+    --space-6: 3.5rem;
+    --radius-small: 0.35rem;
+    --radius-medium: 0.7rem;
+    --color-text: #172033;
+    --color-text-muted: #596579;
+    --color-background: #f7f8fa;
+    --color-surface: #ffffff;
+    --color-surface-subtle: #f0f3f7;
+    --color-border: #d7dde6;
+    --color-accent: #275dad;
+    --color-accent-strong: #184482;
+    --color-accent-soft: #eaf2ff;
+    --color-success: #176b45;
+    --color-success-soft: #e9f7f0;
+    --color-warning: #855800;
+    --color-warning-soft: #fff5d6;
+    --color-danger: #a12c37;
+    --color-danger-soft: #fff0f1;
+    --color-code: #111827;
+    --color-code-background: #eef1f5;
+    --shadow-subtle: 0 1px 2px rgb(18 32 55 / 8%);
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-text: #e7ebf2;
+    --color-text-muted: #aeb8c8;
+    --color-background: #11151c;
+    --color-surface: #181e28;
+    --color-surface-subtle: #202734;
+    --color-border: #344052;
+    --color-accent: #82b2ff;
+    --color-accent-strong: #b4d1ff;
+    --color-accent-soft: #172a46;
+    --color-success: #7bd7aa;
+    --color-success-soft: #173629;
+    --color-warning: #efca73;
+    --color-warning-soft: #3a301a;
+    --color-danger: #ff9ca5;
+    --color-danger-soft: #421f25;
+    --color-code: #f0f3f8;
+    --color-code-background: #0d1118;
+    --shadow-subtle: 0 1px 2px rgb(0 0 0 / 28%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --color-text: #e7ebf2;
+        --color-text-muted: #aeb8c8;
+        --color-background: #11151c;
+        --color-surface: #181e28;
+        --color-surface-subtle: #202734;
+        --color-border: #344052;
+        --color-accent: #82b2ff;
+        --color-accent-strong: #b4d1ff;
+        --color-accent-soft: #172a46;
+        --color-success: #7bd7aa;
+        --color-success-soft: #173629;
+        --color-warning: #efca73;
+        --color-warning-soft: #3a301a;
+        --color-danger: #ff9ca5;
+        --color-danger-soft: #421f25;
+        --color-code: #f0f3f8;
+        --color-code-background: #0d1118;
+        --shadow-subtle: 0 1px 2px rgb(0 0 0 / 28%);
+    }
+}
+
+
+/* components.css */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--color-background);
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    color: var(--color-text);
+    background: var(--color-background);
+    font-family: var(--font-body);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    overflow-wrap: break-word;
+}
+
+body,
+button,
+select {
+    font-family: var(--font-body);
+}
+
+a {
+    color: var(--color-accent);
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.16em;
+}
+
+a:hover {
+    color: var(--color-accent-strong);
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
+.skip-link {
+    position: fixed;
+    z-index: 10;
+    inset-block-start: var(--space-2);
+    inset-inline-start: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-small);
+    color: var(--color-surface);
+    background: var(--color-accent-strong);
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.page {
+    width: min(var(--page-width), calc(100% - 2rem));
+    margin-inline: auto;
+}
+
+.document {
+    padding-block: var(--space-5) var(--space-6);
+}
+
+.document > header,
+.document > nav,
+.document > section,
+.document > aside {
+    width: min(100%, var(--content-width));
+    margin-inline: auto;
+}
+
+.document > .wide {
+    width: 100%;
+}
+
+.document > .wide > h2,
+.document > .wide > h3,
+.document > .wide > .section-intro {
+    width: min(100%, 39rem);
+    margin-inline: auto;
+}
+
+.document-header {
+    padding-block-end: var(--space-5);
+    border-block-end: 1px solid var(--color-border);
+}
+
+.eyebrow {
+    margin: 0 0 var(--space-2);
+    color: var(--color-accent);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    color: var(--color-text);
+    line-height: 1.28;
+    line-break: strict;
+    overflow-wrap: normal;
+    text-wrap: balance;
+    word-break: normal;
+    scroll-margin-block-start: var(--space-4);
+}
+
+h1 {
+    max-width: 22ch;
+    margin: 0 0 var(--space-3);
+    font-size: clamp(2rem, 6vw, 3.35rem);
+    letter-spacing: -0.035em;
+}
+
+h2 {
+    margin: var(--space-6) 0 var(--space-3);
+    font-size: clamp(1.45rem, 3.2vw, 2rem);
+    letter-spacing: -0.018em;
+}
+
+h3 {
+    margin: var(--space-5) 0 var(--space-2);
+    font-size: 1.22rem;
+}
+
+p,
+ul,
+ol,
+dl,
+blockquote,
+pre,
+table {
+    margin-block: 0 var(--space-3);
+}
+
+p:last-child,
+ul:last-child,
+ol:last-child {
+    margin-block-end: 0;
+}
+
+.lede {
+    max-width: 60ch;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: clamp(1.08rem, 2.4vw, 1.28rem);
+}
+
+.metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: var(--space-4) 0 0;
+    padding: 0;
+}
+
+.metadata div {
+    min-width: 9rem;
+}
+
+.metadata dt {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.metadata dd {
+    margin: 0;
+}
+
+.summary {
+    margin-block: var(--space-5);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-inline-start: 0.35rem solid var(--color-accent);
+    border-radius: var(--radius-medium);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-subtle);
+}
+
+.summary h2 {
+    margin-block-start: 0;
+    font-size: 1.25rem;
+}
+
+.key-findings,
+.recommendations,
+.risks,
+.next-actions {
+    margin-block: var(--space-5);
+}
+
+.finding,
+.recommendation,
+.risk,
+.decision,
+.option {
+    margin-block: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-subtle);
+    break-inside: avoid;
+}
+
+.recommendation,
+.decision {
+    border-inline-start: 0.3rem solid var(--color-accent);
+}
+
+.risk {
+    border-inline-start: 0.3rem solid var(--color-warning);
+}
+
+.finding h3,
+.recommendation h3,
+.risk h3,
+.decision h3,
+.option h3 {
+    margin-block-start: 0;
+}
+
+.finding-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    margin-block-end: var(--space-3);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    padding: 0.1rem 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text);
+    background: var(--color-surface-subtle);
+    font-size: 0.78rem;
+    font-weight: 750;
+    line-height: 1.2;
+}
+
+.status-badge[data-status="critical"],
+.status-badge[data-status="high"] {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
+}
+
+.status-badge[data-status="medium"],
+.status-badge[data-status="warning"],
+.status-badge[data-status="deferred"] {
+    border-color: var(--color-warning);
+    color: var(--color-warning);
+    background: var(--color-warning-soft);
+}
+
+.status-badge[data-status="low"],
+.status-badge[data-status="info"],
+.status-badge[data-status="accepted"],
+.status-badge[data-status="resolved"] {
+    border-color: var(--color-success);
+    color: var(--color-success);
+    background: var(--color-success-soft);
+}
+
+.callout {
+    margin-block: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-inline-start: 0.3rem solid var(--color-accent);
+    background: var(--color-accent-soft);
+}
+
+.callout.warning {
+    border-inline-start-color: var(--color-warning);
+    background: var(--color-warning-soft);
+}
+
+.callout.danger {
+    border-inline-start-color: var(--color-danger);
+    background: var(--color-danger-soft);
+}
+
+.evidence {
+    margin-block: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-surface-subtle);
+}
+
+.label {
+    display: block;
+    margin-block-end: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-weight: 750;
+}
+
+.table-wrap {
+    max-width: 100%;
+    margin-block: var(--space-4);
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    background: var(--color-surface);
+    scrollbar-gutter: stable;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    line-height: 1.55;
+}
+
+.scroll-table {
+    min-width: 42rem;
+}
+
+caption {
+    padding: var(--space-3);
+    color: var(--color-text-muted);
+    font-weight: 650;
+    text-align: start;
+}
+
+th,
+td {
+    padding: var(--space-2) var(--space-3);
+    border-block-start: 1px solid var(--color-border);
+    text-align: start;
+    vertical-align: top;
+}
+
+thead th {
+    border-block-start: 0;
+    background: var(--color-surface-subtle);
+}
+
+tbody th {
+    min-width: 9rem;
+}
+
+code,
+kbd {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+}
+
+:not(pre) > code {
+    padding: 0.12em 0.32em;
+    border-radius: 0.25rem;
+    color: var(--color-code);
+    background: var(--color-code-background);
+}
+
+pre {
+    max-width: 100%;
+    padding: var(--space-3);
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    color: var(--color-code);
+    background: var(--color-code-background);
+    line-height: 1.55;
+    tab-size: 4;
+}
+
+.code-copy {
+    display: block;
+    min-height: 2.5rem;
+    margin: var(--space-2) 0 var(--space-1) auto;
+}
+
+details {
+    margin-block: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-surface);
+}
+
+summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+details[open] summary {
+    margin-block-end: var(--space-3);
+}
+
+.sources {
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-border);
+}
+
+.sources > h2 {
+    margin-block-start: var(--space-3);
+}
+
+.document-toc {
+    margin-block: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-block: 1px solid var(--color-border);
+}
+
+.document-toc > p {
+    margin-block-end: var(--space-2);
+    font-weight: 750;
+}
+
+.document-toc ol {
+    columns: 2;
+    column-gap: var(--space-5);
+    padding-inline-start: 1.25rem;
+}
+
+.source-ref {
+    white-space: nowrap;
+}
+
+.sources li + li,
+.next-actions li + li {
+    margin-block-start: var(--space-2);
+}
+
+.tool-row,
+.review-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: end;
+    margin-block: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    background: var(--color-surface-subtle);
+}
+
+.review-filter label {
+    display: grid;
+    gap: var(--space-1);
+    font-weight: 650;
+}
+
+button,
+select {
+    min-height: 2.5rem;
+    padding: 0.45rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    color: var(--color-text);
+    background: var(--color-surface);
+    font-size: 0.92rem;
+    touch-action: manipulation;
+}
+
+button {
+    cursor: pointer;
+}
+
+summary {
+    touch-action: manipulation;
+}
+
+button:hover {
+    border-color: var(--color-accent);
+}
+
+blockquote {
+    margin-inline: 0;
+    padding-inline-start: var(--space-4);
+    border-inline-start: 0.25rem solid var(--color-border);
+    color: var(--color-text-muted);
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 640px) {
+    .page {
+        width: min(100% - 1.25rem, var(--page-width));
+    }
+
+    .document {
+        padding-block-start: var(--space-4);
+    }
+
+    h1 {
+        font-size: clamp(1.9rem, 10vw, 2.65rem);
+    }
+
+    .document-toc {
+        padding-inline: var(--space-3);
+    }
+
+    .document-toc ol {
+        columns: 1;
+    }
+
+    .summary,
+    .finding,
+    .recommendation,
+    .risk,
+    .decision,
+    .option {
+        padding: var(--space-3);
+    }
+
+    th,
+    td {
+        padding: var(--space-2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+
+/* print.css */
+@media print {
+    :root,
+    :root[data-theme="dark"],
+    :root:not([data-theme="light"]) {
+        color-scheme: light;
+        --color-text: #000000;
+        --color-text-muted: #333333;
+        --color-background: #ffffff;
+        --color-surface: #ffffff;
+        --color-surface-subtle: #f4f4f4;
+        --color-border: #999999;
+        --color-accent: #000000;
+        --color-accent-strong: #000000;
+        --color-accent-soft: #ffffff;
+        --color-success: #000000;
+        --color-success-soft: #ffffff;
+        --color-warning: #000000;
+        --color-warning-soft: #ffffff;
+        --color-danger: #000000;
+        --color-danger-soft: #ffffff;
+        --color-code: #000000;
+        --color-code-background: #f4f4f4;
+        --shadow-subtle: none;
+    }
+
+    @page {
+        margin: 16mm;
+    }
+
+    body {
+        font-size: 10.5pt;
+        background: #ffffff;
+    }
+
+    .page,
+    .document > header,
+    .document > nav,
+    .document > section,
+    .document > aside {
+        width: 100%;
+        max-width: none;
+    }
+
+    .skip-link,
+    .tool-row,
+    .review-filter,
+    .code-copy,
+    button,
+    select {
+        display: none !important;
+    }
+
+    .document {
+        padding: 0;
+    }
+
+    h1 {
+        font-size: 24pt;
+    }
+
+    h2,
+    h3,
+    h4 {
+        break-after: avoid-page;
+    }
+
+    .finding,
+    .recommendation,
+    .risk,
+    .decision,
+    .option,
+    .summary,
+    pre,
+    figure {
+        break-inside: avoid-page;
+        box-shadow: none;
+    }
+
+    p,
+    li {
+        orphans: 3;
+        widows: 3;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    tr {
+        break-inside: avoid-page;
+    }
+
+    details {
+        display: block;
+    }
+
+    details > * {
+        display: block;
+    }
+
+    details > summary {
+        list-style: none;
+    }
+
+    .table-wrap,
+    pre {
+        overflow: visible;
+    }
+
+    a[href^="http"]::after {
+        content: " (" attr(href) ")";
+        color: #333333;
+        font-size: 0.82em;
+        overflow-wrap: anywhere;
+    }
+
+}
+
+    </style>
+</head>
+<body>
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+    <main id="main-content" class="document document-report page" data-document-type="report">
+<header class="document-header">
+  <p class="eyebrow">技術調査レポート</p>
+  <h1>Modern Standby環境で画面を暗くし、ローカル処理を継続する方法</h1>
+  <p class="lede">類似事例とWindowsの公式仕様を照合すると、内蔵画面を汎用APIで物理消灯しながらWindowsを通常稼働状態に保つ確実な方法は確認できなかった。DisplayLightでは、既存の手動消灯を残しつつ、別の「作業継続モード」として画面を論理的にオンに保ち、最低輝度と黒画面を組み合わせる案が最も実装可能性が高い。</p>
+  <dl class="metadata">
+    <div>
+      <dt>作成日</dt>
+      <dd>2026年7月31日</dd>
+    </div>
+    <div>
+      <dt>対象</dt>
+      <dd>DisplayLight / Windows 11 Modern Standby</dd>
+    </div>
+    <div>
+      <dt>状態</dt>
+      <dd><span class="status-badge" data-status="accepted">調査完了・実装判断待ち</span></dd>
+    </div>
+    <div>
+      <dt>読者</dt>
+      <dd>設計・実装・実機検証担当者</dd>
+    </div>
+  </dl>
+</header>
+
+<section class="summary" aria-labelledby="summary-title">
+  <h2 id="summary-title">結論</h2>
+  <p><code>SC_MONITORPOWER</code>を使わない選択肢はある。ただし、内蔵パネルについては「物理的に消灯」と「Windows上の画面オン状態」を同時に満たす、機種非依存の公開APIは確認できなかった。最も堅実なのは、<code>PowerRequestDisplayRequired</code>と<code>PowerRequestSystemRequired</code>を保持し、内蔵画面を最低輝度へ下げ、必要なら黒い全画面表示を重ねる方式である。外部モニターにはDDC/CIによる物理電源制御を追加できるが、対応機器だけの任意機能とすべきである。<a class="source-ref" href="#source-5">[5]</a><a class="source-ref" href="#source-11">[11]</a><a class="source-ref" href="#source-12">[12]</a></p>
+  <aside class="callout warning">
+    <strong>重要な留保：</strong>Microsoftの仕様では、Modern Standbyの「Screen Off」と長期低電力の「Sleep」は別段階であり、画面オフ直後に必ずデスクトップアプリが停止するわけではない。今回の11秒での切断は、手動消灯経路、実際のPower Request、AC限定設定、OEM電源ポリシーを分離して再検証する必要がある。<a class="source-ref" href="#source-1">[1]</a><a class="source-ref" href="#source-2">[2]</a>
+  </aside>
+</section>
+
+<nav class="document-toc" aria-label="目次">
+  <p>目次</p>
+  <ol>
+    <li><a href="#question">調査目的</a></li>
+    <li><a href="#model">公式仕様から分かること</a></li>
+    <li><a href="#cases">類似事例</a></li>
+    <li><a href="#approaches">試されている手段</a></li>
+    <li><a href="#comparison">方式比較</a></li>
+    <li><a href="#findings">主要な発見</a></li>
+    <li><a href="#recommendations">DisplayLightへの提案</a></li>
+    <li><a href="#risks">リスクと制約</a></li>
+    <li><a href="#verification">検証計画</a></li>
+    <li><a href="#sources">情報源</a></li>
+  </ol>
+</nav>
+
+<section id="question" aria-labelledby="question-title">
+  <h2 id="question-title">調査目的</h2>
+  <p>本調査は、Modern Standby対応Windows PCで、画面を暗くまたは物理消灯しながら、Codexのような通常のデスクトップ処理とネットワーク接続を継続できるかを確認するものである。特に、DisplayLightが現在使っている<code>SC_MONITORPOWER</code>以外の方法、既存ツールの実装、利用者が遭遇した失敗例を対象とした。</p>
+  <p>技術的な挙動はMicrosoft LearnとMicrosoftの公開実装を根拠とし、GitHub Issue、Microsoft Q&amp;A、Framework Community、Redditは再現例または利用者報告として区別した。コミュニティ投稿だけをWindows仕様の根拠にはしていない。</p>
+</section>
+
+<section id="model" aria-labelledby="model-title">
+  <h2 id="model-title">公式仕様から分かること</h2>
+  <article class="finding">
+    <h3>画面オフと長期低電力は同じ瞬間ではない</h3>
+    <p>Modern Standbyセッションは画面オフから画面オンまでを包含するが、内部では通常処理を静める<code>Screen Off</code>段階と、長期低電力の<code>Sleep</code>段階に分かれる。Microsoftは、画面タイムアウト後もスリープタイムアウトまではアプリが通常どおり動作できる設計を説明している。<a class="source-ref" href="#source-1">[1]</a><a class="source-ref" href="#source-2">[2]</a></p>
+    <div class="evidence">
+      <span class="label">含意</span>
+      <p><code>SC_MONITORPOWER</code>のイベントが記録されたことだけでは、同時刻にDRIPSへ入りCodexが停止したとは断定できない。Screen Off段階を何が終了させたかを調べる必要がある。</p>
+    </div>
+  </article>
+  <article class="finding">
+    <h3>Power RequestはScreen Off段階を延長できる</h3>
+    <p><code>SystemRequired</code>などの要求は、AC電源では解除されるまでScreen Off段階を延長できる。DC電源では、システムスリープタイムアウト経過後に最大5分という制限がある。低電力段階へ進むとDesktop Activity Moderatorが通常のデスクトップアプリを停止し、Adaptive Connected Standbyが通信を切断する場合がある。<a class="source-ref" href="#source-3">[3]</a><a class="source-ref" href="#source-4">[4]</a><a class="source-ref" href="#source-5">[5]</a></p>
+    <div class="evidence">
+      <span class="label">含意</span>
+      <p>DCで一晩中、画面オフのままローカルデスクトップ処理を保証する用途に<code>SystemRequired</code>だけを使うことはできない。一方、画面オフ直後の11秒停止は5分上限だけでは説明できない。</p>
+    </div>
+  </article>
+  <article class="finding">
+    <h3>DisplayRequiredは画面を論理的にオンへ保つ</h3>
+    <p><code>PowerRequestDisplayRequired</code>は、無操作が続いてもセッションの画面をオンのまま維持する。システムスリープも防ぐには<code>SystemRequired</code>との併用が必要である。MicrosoftのDC時5分制限の記述はSystem RequiredとExecution Requiredを対象としており、Display Requiredは画面オフ自体を発生させない経路になる。<a class="source-ref" href="#source-5">[5]</a></p>
+    <div class="evidence">
+      <span class="label">含意</span>
+      <p>画面をWindows上でオンに保ちつつ、輝度や描画内容だけを暗くするなら、Modern Standbyセッションの入口を避けられる可能性が高い。</p>
+    </div>
+  </article>
+</section>
+
+<section id="cases" aria-labelledby="cases-title">
+  <h2 id="cases-title">類似事例</h2>
+  <article class="finding">
+    <div class="finding-meta">
+      <span class="status-badge" data-status="resolved">同じ症状</span>
+      <span>Framework Laptop利用者</span>
+    </div>
+    <h3>SC_MONITORPOWERとNirCmdが本体スリープにつながる</h3>
+    <p>Framework Laptop 16の利用者は、ショートカットで画面だけを消したいという同じ目的で<code>SC_MONITORPOWER</code>とNirCmdを試し、どちらもノートPC本体をスリープさせると報告している。解決済みの技術回答は得られていない。<a class="source-ref" href="#source-7">[7]</a></p>
+    <div class="evidence">
+      <span class="label">解釈</span>
+      <p>別のコマンドラインツールへ置き換えても、内部で同じWindows画面オフ経路を使う限り挙動は変わらない可能性が高い。</p>
+    </div>
+  </article>
+  <article class="finding">
+    <div class="finding-meta">
+      <span class="status-badge" data-status="info">設計上の制約</span>
+      <span>Microsoft Q&amp;A</span>
+    </div>
+    <h3>Screen Offを継続状態として固定できないという相談</h3>
+    <p>SleepStudyでScreen OffとSleepが交互に現れることを問題にした質問に対し、Modern Standbyは画面オフ後にSleepへ進む設計であり、設定だけでScreen Off状態を恒久維持する直接的な方法はない、という回答が受け入れられている。<a class="source-ref" href="#source-8">[8]</a></p>
+  </article>
+  <article class="finding">
+    <div class="finding-meta">
+      <span class="status-badge" data-status="warning">再現性に差</span>
+      <span>PowerToys Awake利用者</span>
+    </div>
+    <h3>一般的な「Keep Awake」ツールにも機種差がある</h3>
+    <p>Microsoft PowerToys Awakeは、システムを起動状態に保ち、必要なら画面もオンに保てる公式ツールである。一方、そのGitHub Issueには「indefinitely」でも後にスリープした、外部モニターではKeep screen onが効かなかった、という利用者報告がある。Issueだけでは原因は確定していない。<a class="source-ref" href="#source-9">[9]</a><a class="source-ref" href="#source-10">[10]</a></p>
+    <div class="evidence">
+      <span class="label">含意</span>
+      <p>Power Request APIを正しく呼ぶだけで、すべてのOEM、モニター、電源ポリシーに同じ結果を保証できるわけではない。実機のSleepStudyと<code>powercfg /requests</code>が必要になる。</p>
+    </div>
+  </article>
+  <article class="finding">
+    <div class="finding-meta">
+      <span class="status-badge" data-status="warning">最近の利用者報告</span>
+      <span>ASUS ProArt利用者</span>
+    </div>
+    <h3>画面オフとロック後の通常処理継続を求める例</h3>
+    <p>別の利用者は、Windowsのスリープ設定を無効化してもロック画面の消灯後にS0 Sleepへ入ると報告している。同じ機種でも設定結果が異なるという返信があり、OEMユーティリティ、ロック状態、電源プランによる差が示唆される。これは仕様根拠ではなく、機種依存性を示す事例である。<a class="source-ref" href="#source-15">[15]</a></p>
+  </article>
+</section>
+
+<section id="approaches" aria-labelledby="approaches-title">
+  <h2 id="approaches-title">実際に試されている手段</h2>
+  <article class="option">
+    <h3>1. 電源プランとSystemRequiredで画面オフ状態を延長する</h3>
+    <p>Windowsの画面タイムアウトとシステムスリープタイムアウトを分け、PowerToys Awakeや独自のPower Requestでシステムスリープを防ぐ方法である。ACでは公式仕様と整合する。DCではタイムアウト後の上限があるため、長時間保証にはならない。<a class="source-ref" href="#source-1">[1]</a><a class="source-ref" href="#source-3">[3]</a><a class="source-ref" href="#source-9">[9]</a></p>
+  </article>
+  <article class="option">
+    <h3>2. DisplayRequiredで画面オンを維持し、最低輝度と黒表示を使う</h3>
+    <p>画面オフイベントそのものを発生させず、WMIの<code>WmiSetBrightness</code>で内蔵パネルの輝度を最低値へ下げる。黒い全画面ウィンドウを追加すれば、最低輝度が十分暗くない機種やOLEDの発光を抑えられる。ただしパネルと表示経路はオンのままで、物理消灯ではない。<a class="source-ref" href="#source-5">[5]</a><a class="source-ref" href="#source-11">[11]</a></p>
+  </article>
+  <article class="option">
+    <h3>3. 外部モニターをDDC/CIで直接制御する</h3>
+    <p>Windowsの論理画面状態を維持したまま、モニターへVCPコマンドを送る方法である。Twinkle Trayは任意VCPコードと電源状態の操作を提供し、MonitorianはDDC/CI能力を検査して対応モニターだけを操作する。既に多数の利用者がいる実装例だが、モニター、ケーブル、ドック、GPUドライバーへの依存が強い。<a class="source-ref" href="#source-12">[12]</a><a class="source-ref" href="#source-13">[13]</a><a class="source-ref" href="#source-14">[14]</a></p>
+  </article>
+  <article class="option">
+    <h3>4. Modern Standbyをレジストリで無効化する</h3>
+    <p>コミュニティでは<code>PlatformAoAcOverride</code>などの変更例が見つかるが、MicrosoftはS3とModern Standbyの切替をWindows上の設定変更としてサポートしていない。S3用ファームウェアがない機種では、スリープ不能、復帰不良、ドライバー問題を招く可能性があるためDisplayLightの製品機能には適さない。<a class="source-ref" href="#source-6">[6]</a><a class="source-ref" href="#source-15">[15]</a></p>
+  </article>
+</section>
+
+<section id="comparison" class="wide" aria-labelledby="comparison-title">
+  <h2 id="comparison-title">方式比較</h2>
+  <p class="section-intro">「内蔵画面」「DCでのローカル処理」「機種非依存性」を同時に満たす方式はない。DisplayLightでは目的の異なる二つのモードへ分けるのが妥当である。</p>
+  <div class="table-wrap">
+    <table class="scroll-table">
+      <caption>SC_MONITORPOWERの代替候補</caption>
+      <thead>
+        <tr>
+          <th scope="col">方式</th>
+          <th scope="col">画面の実状態</th>
+          <th scope="col">内蔵画面</th>
+          <th scope="col">外部画面</th>
+          <th scope="col">DC長時間処理</th>
+          <th scope="col">互換性</th>
+          <th scope="col">判断</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">SC_MONITORPOWER＋SystemRequired</th>
+          <td>Windows上でオフ</td>
+          <td>対応</td>
+          <td>対応</td>
+          <td>保証不可</td>
+          <td>OEM差あり</td>
+          <td>既存の即時消灯として維持</td>
+        </tr>
+        <tr>
+          <th scope="row">自然な画面タイムアウト＋SystemRequired</th>
+          <td>Windows上でオフ</td>
+          <td>対応</td>
+          <td>対応</td>
+          <td>保証不可</td>
+          <td>手動消灯との差を要検証</td>
+          <td>比較実験の対象</td>
+        </tr>
+        <tr>
+          <th scope="row">DisplayRequired＋最低輝度＋黒表示</th>
+          <td>論理オン、視覚的に暗い</td>
+          <td>対応可能</td>
+          <td>黒表示のみ</td>
+          <td>最有力</td>
+          <td>輝度APIと復元に機種差</td>
+          <td><strong>作業継続モードとして推奨</strong></td>
+        </tr>
+        <tr>
+          <th scope="row">DDC/CI電源制御</th>
+          <td>モニター側で物理オフ</td>
+          <td>原則非対応</td>
+          <td>対応機器のみ</td>
+          <td>PC側は継続可能</td>
+          <td>モニター・接続経路依存</td>
+          <td>任意の外部画面機能</td>
+        </tr>
+        <tr>
+          <th scope="row">Modern Standby無効化</th>
+          <td>構成次第</td>
+          <td>構成次第</td>
+          <td>構成次第</td>
+          <td>未保証</td>
+          <td>非サポート・高リスク</td>
+          <td>採用しない</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="findings" class="key-findings" aria-labelledby="findings-title">
+  <h2 id="findings-title">主要な発見</h2>
+  <article class="finding">
+    <h3>同じ目的を持つ利用者は複数存在する</h3>
+    <p>長時間処理、WSL、ダウンロード、ロック後の処理を、画面オフのまま続けたいという相談は複数確認できた。特にModern Standby機では、従来PCで成立した「画面だけオフ」という前提が崩れることが共通の混乱点になっている。<a class="source-ref" href="#source-7">[7]</a><a class="source-ref" href="#source-8">[8]</a><a class="source-ref" href="#source-15">[15]</a></p>
+  </article>
+  <article class="finding">
+    <h3>コマンド名を変えるだけでは解決しない</h3>
+    <p>NirCmd、PowerShell、AutoHotkeyなどの「モニターをオフ」機能は、最終的に<code>SC_MONITORPOWER</code>または同等のWindows画面オフ経路を使う例が多い。ラッパーを変更しても、Windowsの電源状態遷移は同じになり得る。<a class="source-ref" href="#source-7">[7]</a></p>
+  </article>
+  <article class="finding">
+    <h3>内蔵パネルの物理消灯には公開された汎用経路がない</h3>
+    <p>Microsoftが公開している汎用手段は、画面状態の要求、内蔵画面の輝度変更、外部モニターのDDC/CI制御に分かれる。内蔵パネルだけを物理的に電源断し、OSには画面オンとして扱わせる共通APIは今回の調査では確認できなかった。これは「存在しないことの完全証明」ではなく、公開資料と代表的実装からの結論である。<a class="source-ref" href="#source-5">[5]</a><a class="source-ref" href="#source-11">[11]</a><a class="source-ref" href="#source-12">[12]</a></p>
+  </article>
+  <article class="finding">
+    <h3>今回の11秒停止は追加診断が必要</h3>
+    <p>2026年7月31日の実機ログでは、02:19:01に<code>SC_MONITORPOWER</code>でModern Standbyセッションが始まり、02:19:12にAdaptive Connected Standbyが通信を切断した。公式仕様のDC上限は最大5分であり、この差から、Power Requestが実際に有効だったか、AC限定が有効だったか、手動消灯が明示的待機として扱われたかを再確認する必要がある。<a class="source-ref" href="#source-3">[3]</a><a class="source-ref" href="#source-16">[16]</a></p>
+  </article>
+</section>
+
+<section id="recommendations" class="recommendations" aria-labelledby="recommendations-title">
+  <h2 id="recommendations-title">DisplayLightへの提案</h2>
+  <article class="recommendation">
+    <h3>即時消灯と作業継続を別機能にする</h3>
+    <p>現在の「ディスプレイをオフ」はWindows標準の即時消灯として残し、Modern Standbyでは作業継続を保証しない旨を表示する。別に「作業継続中は画面を暗くする」を追加し、<code>DisplayRequired</code>、<code>SystemRequired</code>、最低輝度、任意の黒表示を一つのライフサイクルで管理する。</p>
+  </article>
+  <article class="recommendation">
+    <h3>モード開始前の輝度を保存し、必ず復元する</h3>
+    <p>入力、利用者の解除、電源状態変更、アプリ終了、更新適用、例外発生時に元の輝度へ戻す。保存値はディスプレイごとに保持し、取得できなかった画面は変更しない。復元不能時は現在値と手動復旧方法を表示する。</p>
+  </article>
+  <article class="recommendation">
+    <h3>外部モニターDDC/CIは能力検出後の任意機能にする</h3>
+    <p>Monitorianと同様、対応能力を取得できたモニターだけを対象にする。既定では輝度変更までとし、電源VCPは実機確認済みのモニターに対する詳細設定へ限定する。DDC/CIの失敗をシステムスリープ防止の失敗へ連鎖させない。<a class="source-ref" href="#source-12">[12]</a><a class="source-ref" href="#source-13">[13]</a><a class="source-ref" href="#source-14">[14]</a></p>
+  </article>
+  <article class="recommendation">
+    <h3>SC_MONITORPOWERを削除する前に比較試験を行う</h3>
+    <p>手動消灯、自然な<code>VIDEOIDLE</code>、DisplayRequired＋最低輝度の3経路を、AC/DCとAC限定設定の組合せで比較する。Power RequestがOS側に見えていることを管理者権限の<code>powercfg /requests</code>で確認したうえで判断する。</p>
+  </article>
+</section>
+
+<section id="risks" class="risks" aria-labelledby="risks-title">
+  <h2 id="risks-title">リスクと制約</h2>
+  <article class="risk">
+    <h3>バッテリー消費と発熱</h3>
+    <p><strong>条件：</strong>画面を論理オンに保ち、CPUとネットワークを通常動作させる。<br><strong>影響：</strong>Modern Standbyより大幅に電力を消費し、バッテリー切れ、性能低下、発熱が起こり得る。<br><strong>緩和：</strong>残量警告、推定継続時間、温度・バッテリー低下時の安全解除を検討する。</p>
+  </article>
+  <article class="risk">
+    <h3>輝度0が消灯を意味しない</h3>
+    <p><strong>条件：</strong>機種が公開する最低輝度が0より高い、または0でもバックライトが残る。<br><strong>影響：</strong>暗室で光が見える、期待した節電にならない。<br><strong>緩和：</strong>黒表示を併用し、「画面オフ」ではなく「最低輝度」と表現する。</p>
+  </article>
+  <article class="risk">
+    <h3>DDC/CIで外部モニターが応答不能になる</h3>
+    <p><strong>条件：</strong>モニターがMCCSを不完全に実装している、ドックや変換器がコマンドを通さない。<br><strong>影響：</strong>消灯後にソフトウェアから復帰できない、表示構成が変わる。<br><strong>緩和：</strong>能力検出、機種単位の明示的オプトイン、物理ボタンによる復旧案内を必須にする。MicrosoftとTwinkle Trayの双方が互換性問題を警告している。<a class="source-ref" href="#source-12">[12]</a><a class="source-ref" href="#source-13">[13]</a></p>
+  </article>
+  <article class="risk">
+    <h3>黒画面はセキュリティロックではない</h3>
+    <p><strong>条件：</strong>黒いオーバーレイだけを表示する。<br><strong>影響：</strong>入力や別のプロセスで画面内容が見える可能性がある。<br><strong>緩和：</strong>ロックとの関係を別途設計し、「非表示」と「ロック」を同義にしない。</p>
+  </article>
+</section>
+
+<section id="verification" class="next-actions" aria-labelledby="verification-title">
+  <h2 id="verification-title">検証計画</h2>
+  <ol>
+    <li><strong>基準取得：</strong><code>powercfg /a</code>でS0 Low Power Idleを確認し、管理者PowerShellで<code>powercfg /requests</code>を記録する。</li>
+    <li><strong>3経路比較：</strong><code>SC_MONITORPOWER</code>、自然な画面タイムアウト、DisplayRequired＋最低輝度を各30分以上実行する。</li>
+    <li><strong>条件分割：</strong>AC/DC、AC限定オン/オフ、ロック有無を混ぜずに一条件ずつ確認する。</li>
+    <li><strong>実行継続確認：</strong>秘密情報を含まないローカルカウンターと疎通メタデータで、デスクトップ処理とネットワークの停止時刻を記録する。</li>
+    <li><strong>SleepStudy：</strong><code>powercfg /sleepstudy</code>またはSystem Power ReportでScreen OffとSleepの境界、Power Request、ネットワーク状態を照合する。</li>
+    <li><strong>外部画面：</strong>DDC/CI対応能力、輝度変更、電源オフ、物理ボタンからの復旧をモニターごとに確認する。</li>
+    <li><strong>採用判定：</strong>DCでCodexが継続し、入力・解除・終了・例外後に輝度とPower Requestが復元される場合だけ作業継続モードを製品化する。</li>
+  </ol>
+  <aside class="callout">
+    <strong>次の最小実装：</strong>本番UIへ追加する前に、DisplayRequired＋SystemRequiredと輝度保存・復元だけを行う診断用スパイクを作り、このPCで30分のDC試験を行う。
+  </aside>
+</section>
+
+<section id="sources" class="sources" aria-labelledby="sources-title">
+  <h2 id="sources-title">情報源</h2>
+  <ol>
+    <li id="source-1"><a href="https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/display--sleep--and-hibernate-idle-timers">Microsoft Learn「Display, sleep, and hibernate idle timers」</a>：画面タイムアウトとスリープタイムアウトの分離。</li>
+    <li id="source-2"><a href="https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/modern-standby-states">Microsoft Learn「Modern Standby states」</a>：Screen OffとSleep段階の区別。</li>
+    <li id="source-3"><a href="https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/prepare-software-for-modern-standby">Microsoft Learn「Prepare software for modern standby」</a>：Power Request、DAM、AC/DC制限。</li>
+    <li id="source-4"><a href="https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/modern-standby-network-connectivity">Microsoft Learn「Network connectivity」</a>：Adaptive Connected Standbyのネットワーク制御。</li>
+    <li id="source-5"><a href="https://learn.microsoft.com/ja-jp/windows/win32/api/winbase/nf-winbase-powersetrequest">Microsoft Learn「PowerSetRequest」</a>：Display Required、System Required、Execution Requiredの意味。</li>
+    <li id="source-6"><a href="https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/modern-standby">Microsoft Learn「What is Modern Standby」</a>：S3との関係と切替非サポート。</li>
+    <li id="source-7"><a href="https://community.frame.work/t/how-can-i-turn-off-the-display-without-putting-the-laptop-to-sleep/67713">Framework Community「How can I turn off the display without putting the laptop to sleep?」</a>：SC_MONITORPOWERとNirCmdでの利用者再現例。</li>
+    <li id="source-8"><a href="https://learn.microsoft.com/en-us/answers/questions/1665454/how-to-maintain-the-display-off-state-on-a-modern">Microsoft Q&amp;A「How to maintain the display-off state on a Modern Standby PC」</a>：Screen Off継続に関する相談。</li>
+    <li id="source-9"><a href="https://microsoft.github.io/PowerToys/modules/awake/">Microsoft PowerToys「Awake」</a>：既存のKeep Awake実装と画面維持オプション。</li>
+    <li id="source-10"><a href="https://github.com/microsoft/PowerToys/issues/32005">PowerToys Issue #32005「Awake not keeping PC awake」</a>：機種・モニター差を示す未確定の利用者報告。</li>
+    <li id="source-11"><a href="https://learn.microsoft.com/ja-jp/windows/win32/wmicoreprov/wmisetbrightness-method-in-class-wmimonitorbrightnessmethods">Microsoft Learn「WmiSetBrightness」</a>：内蔵ディスプレイ輝度変更API。</li>
+    <li id="source-12"><a href="https://learn.microsoft.com/en-us/windows/win32/api/lowlevelmonitorconfigurationapi/nf-lowlevelmonitorconfigurationapi-setvcpfeature">Microsoft Learn「SetVCPFeature」</a>：外部モニターのDDC/CI操作と互換性警告。</li>
+    <li id="source-13"><a href="https://github.com/xanderfrangos/twinkle-tray">Twinkle Tray</a>：DDC/CIによる輝度・任意VCP・電源状態操作の既存実装。</li>
+    <li id="source-14"><a href="https://github.com/emoacht/Monitorian">Monitorian</a>：DDC/CI能力検出と接続経路ごとの互換性情報。</li>
+    <li id="source-15"><a href="https://www.reddit.com/r/ASUS/comments/1v1hext/cant_fully_disable_sleep_on_proart_p16_laptop/">Reddit「Can't fully disable sleep on ProArt P16 laptop」</a>：ロック、画面オフ、OEM差に関する利用者報告。仕様根拠には使用していない。</li>
+    <li id="source-16"><code>Get-WinEvent</code>による2026年7月31日のローカルSystemログ確認：<code>SC_MONITORPOWER</code>、Modern Standby、Adaptive Connected Standbyの時刻と理由。ログ本文、プロンプト、ファイル内容は保存していない。</li>
+    <li id="source-17"><a href="../../src/DisplayLight.App/Infrastructure/Windows/WindowsSleepPreventionService.cs">WindowsSleepPreventionService.cs</a>、<a href="../adr/0005-manual-display-off.md">ADR 0005</a>：DisplayLightの現在のSystem RequiredとSC_MONITORPOWER実装。</li>
+  </ol>
+</section>
+
+<footer>
+  <p>この文書は2026年7月31日時点の調査結果である。Microsoft公式仕様を技術的根拠とし、コミュニティ情報は再現例と実装探索の補助として扱った。製品仕様を変更する場合は、実機比較試験後にDESIGN.mdと新しいADRへ判断を記録する。</p>
+</footer>
+
+    </main>
+
+    <script>
+(function () {
+    "use strict";
+
+    document.documentElement.classList.add("has-js");
+
+    function makeButton(label, className) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = className;
+        button.textContent = label;
+        return button;
+    }
+
+    document.querySelectorAll("pre > code").forEach(function (code, index) {
+        var button = makeButton("コードをコピー", "code-copy");
+        var status = document.createElement("span");
+        var statusId = "copy-status-" + (index + 1);
+
+        status.id = statusId;
+        status.className = "visually-hidden";
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        button.setAttribute("aria-label", "次のコードをクリップボードへコピー");
+        button.setAttribute("aria-describedby", statusId);
+        button.addEventListener("click", function () {
+            navigator.clipboard.writeText(code.textContent || "").then(
+                function () {
+                    button.textContent = "コピーしました";
+                    status.textContent = "コードをクリップボードへコピーしました";
+                    window.setTimeout(function () {
+                        button.textContent = "コードをコピー";
+                        status.textContent = "";
+                    }, 1600);
+                },
+                function () {
+                    button.textContent = "コピーできませんでした";
+                    status.textContent =
+                        "コードをコピーできませんでした。コードを選択して手動でコピーしてください";
+                }
+            );
+        });
+        code.parentElement.insertAdjacentElement("beforebegin", button);
+        button.insertAdjacentElement("afterend", status);
+    });
+
+    var details = Array.from(document.querySelectorAll("details"));
+    if (details.length > 1) {
+        var detailTools = document.createElement("nav");
+        detailTools.className = "tool-row";
+        detailTools.setAttribute("aria-label", "補足情報の操作");
+
+        var openAll = makeButton("補足をすべて開く", "");
+        var closeAll = makeButton("補足をすべて閉じる", "");
+
+        openAll.addEventListener("click", function () {
+            details.forEach(function (item) {
+                item.open = true;
+            });
+        });
+        closeAll.addEventListener("click", function () {
+            details.forEach(function (item) {
+                item.open = false;
+            });
+        });
+
+        detailTools.append(openAll, closeAll);
+        details[0].insertAdjacentElement("beforebegin", detailTools);
+    }
+
+    var findings = document.querySelector("[data-review-findings]");
+    if (findings) {
+        var findingItems = Array.from(findings.querySelectorAll("[data-severity]"));
+        var severities = Array.from(
+            new Set(
+                findingItems.map(function (item) {
+                    return item.getAttribute("data-severity") || "";
+                })
+            )
+        ).filter(Boolean);
+
+        if (severities.length > 1) {
+            var filter = document.createElement("nav");
+            filter.className = "review-filter";
+            filter.setAttribute("aria-label", "レビュー指摘の絞り込み");
+
+            var label = document.createElement("label");
+            label.textContent = "重大度";
+
+            var select = document.createElement("select");
+            var allOption = document.createElement("option");
+            allOption.value = "";
+            allOption.textContent = "すべて表示";
+            select.append(allOption);
+
+            severities.forEach(function (severity) {
+                var option = document.createElement("option");
+                option.value = severity;
+                option.textContent = severity;
+                select.append(option);
+            });
+
+            select.addEventListener("change", function () {
+                findingItems.forEach(function (item) {
+                    item.hidden =
+                        select.value !== "" &&
+                        item.getAttribute("data-severity") !== select.value;
+                });
+            });
+
+            label.append(select);
+            filter.append(label);
+            var findingsHeading = findings.querySelector("h2");
+            if (findingsHeading) {
+                findingsHeading.insertAdjacentElement("afterend", filter);
+            } else {
+                findings.insertBefore(filter, findings.firstChild);
+            }
+        }
+    }
+})();
+
+    </script>
+</body>
+</html>

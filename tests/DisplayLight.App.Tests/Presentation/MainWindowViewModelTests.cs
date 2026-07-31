@@ -11,7 +11,7 @@ public sealed class MainWindowViewModelTests
     [Fact]
     public async Task InitializeAsyncPreservesSelectionForCustomCurrentValue()
     {
-        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(15 * 60, 5 * 60));
+        FakeIdleTimeoutService displayService = new(15 * 60, 5 * 60);
         FakeSleepPreventionService sleepService = new();
         FakeSettingsStore settingsStore = new(new UserSettings
         {
@@ -27,13 +27,13 @@ public sealed class MainWindowViewModelTests
 
         await viewModel.InitializeAsync();
 
-        Assert.Equal("15分（プリセット外）", viewModel.CurrentAcText);
-        Assert.Equal("15分", viewModel.CurrentAcDisplayText);
+        Assert.Equal("画面15分、PCは15分後（合計30分）（プリセット外）", viewModel.CurrentAcText);
+        Assert.Equal("画面15分、PCは15分後（合計30分）", viewModel.CurrentAcDisplayText);
         Assert.True(viewModel.IsCurrentAcCustom);
         Assert.Equal(3, viewModel.SelectedAcSliderValue);
         Assert.False(viewModel.HasPendingAcChange);
         Assert.Equal("前回選択", viewModel.AcSelectionCaption);
-        Assert.Equal("5分", viewModel.CurrentBatteryText);
+        Assert.Equal("画面5分、PCは15分後（合計20分）", viewModel.CurrentBatteryText);
         Assert.Equal(1, viewModel.SelectedBatterySliderValue);
     }
 
@@ -43,7 +43,7 @@ public sealed class MainWindowViewModelTests
         FakeSleepPreventionService sleepService = new();
         FakeSettingsStore settingsStore = new(new UserSettings { IsAcPowerOnly = true });
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeIdleTimeoutService(600, 600),
             sleepService,
             new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.Battery),
@@ -63,7 +63,7 @@ public sealed class MainWindowViewModelTests
     [Fact]
     public async Task ApplyAcCommandPersistsSelectionAfterVerifiedWrite()
     {
-        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(600, 300));
+        FakeIdleTimeoutService displayService = new(600, 300);
         FakeSettingsStore settingsStore = new(new UserSettings());
         using MainWindowViewModel viewModel = new(
             displayService,
@@ -79,9 +79,11 @@ public sealed class MainWindowViewModelTests
         await command.ExecuteAsync();
 
         Assert.Equal(PowerSettingTarget.AcPower, displayService.LastTarget);
-        Assert.Equal(DisplayTimeoutPreset.SixtyMinutes, displayService.LastPreset);
+        Assert.Equal(DisplayTimeoutPreset.SixtyMinutes, displayService.LastSelection?.DisplayTimeout);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, displayService.LastSelection?.SleepDelay);
         Assert.Equal(DisplayTimeoutPreset.SixtyMinutes, settingsStore.LastSaved?.SelectedAcTimeout);
-        Assert.Equal("60分", viewModel.CurrentAcText);
+        Assert.Equal(SleepDelayPreset.FifteenMinutes, settingsStore.LastSaved?.SelectedAcSleepDelay);
+        Assert.Equal("画面60分、PCは15分後（合計75分）", viewModel.CurrentAcText);
         Assert.Equal(5, viewModel.SelectedBatterySliderValue);
         Assert.False(viewModel.HasPendingAcChange);
         Assert.True(viewModel.HasPendingBatteryChange);
@@ -91,7 +93,7 @@ public sealed class MainWindowViewModelTests
     public async Task InitializesExpandedSectionFromCurrentPowerSource()
     {
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeIdleTimeoutService(600, 300),
             new FakeSleepPreventionService(),
             new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.Battery),
@@ -102,15 +104,19 @@ public sealed class MainWindowViewModelTests
         Assert.False(viewModel.IsAcExpanded);
         Assert.True(viewModel.IsBatteryExpanded);
         Assert.Equal("電源：バッテリー駆動", viewModel.PowerSourceText);
-        Assert.Equal("AC電源時、現在10分、展開", viewModel.AcExpansionAutomationName);
-        Assert.Equal("バッテリー時、現在5分、折りたたむ", viewModel.BatteryExpansionAutomationName);
+        Assert.Equal(
+            "AC電源時、現在画面10分、PCは15分後（合計25分）、展開",
+            viewModel.AcExpansionAutomationName);
+        Assert.Equal(
+            "バッテリー時、現在画面5分、PCは15分後（合計20分）、折りたたむ",
+            viewModel.BatteryExpansionAutomationName);
     }
 
     [Fact]
     public async Task ExpandedSectionCanBeCollapsedAndReopened()
     {
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeIdleTimeoutService(600, 300),
             new FakeSleepPreventionService(),
             new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
@@ -121,7 +127,9 @@ public sealed class MainWindowViewModelTests
 
         Assert.False(viewModel.IsAcExpanded);
         Assert.False(viewModel.IsBatteryExpanded);
-        Assert.Equal("AC電源時、現在10分、展開", viewModel.AcExpansionAutomationName);
+        Assert.Equal(
+            "AC電源時、現在画面10分、PCは15分後（合計25分）、展開",
+            viewModel.AcExpansionAutomationName);
 
         viewModel.Expand(PowerSettingTarget.Battery);
 
@@ -133,7 +141,7 @@ public sealed class MainWindowViewModelTests
     public async Task PendingStateOnlyAppearsWhenSelectionDiffersFromCurrentValue()
     {
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 300)),
+            new FakeIdleTimeoutService(600, 300),
             new FakeSleepPreventionService(),
             new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
@@ -150,9 +158,102 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task SleepDelaySelectionUpdatesTotalAndPersistsWithDisplayTimeout()
+    {
+        FakeIdleTimeoutService idleService = new(600, 300);
+        FakeSettingsStore settingsStore = new(new UserSettings());
+        using MainWindowViewModel viewModel = new(
+            idleService,
+            new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            settingsStore);
+        await viewModel.InitializeAsync();
+
+        viewModel.SelectedAcSleepPresetIndex = 4;
+
+        Assert.True(viewModel.HasPendingAcChange);
+        Assert.Equal("60分後", viewModel.SelectedAcSleepText);
+        Assert.Equal("操作がない状態で合計70分後", viewModel.SelectedAcSleepTotalText);
+
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyAcCommand);
+        await command.ExecuteAsync();
+
+        Assert.Equal(SleepDelayPreset.SixtyMinutes, idleService.LastSelection?.SleepDelay);
+        Assert.Equal(SleepDelayPreset.SixtyMinutes, settingsStore.LastSaved?.SelectedAcSleepDelay);
+        Assert.Equal("画面10分、PCは60分後（合計70分）", viewModel.CurrentAcText);
+        Assert.False(viewModel.HasPendingAcChange);
+    }
+
+    [Fact]
+    public async Task DisplayNeverForcesSleepNeverAndRestoresPreferredDelay()
+    {
+        FakeIdleTimeoutService idleService = new(600, 300);
+        FakeSettingsStore settingsStore = new(new UserSettings());
+        using MainWindowViewModel viewModel = new(
+            idleService,
+            new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            settingsStore);
+        await viewModel.InitializeAsync();
+        viewModel.SelectedAcSleepPresetIndex = 1;
+
+        viewModel.SelectedAcPresetIndex = 5;
+
+        Assert.False(viewModel.IsAcSleepDelayEnabled);
+        Assert.Equal(5, viewModel.SelectedAcSleepPresetIndex);
+        Assert.Equal("スリープしない", viewModel.SelectedAcSleepText);
+        Assert.Equal("PCはスリープしません", viewModel.SelectedAcSleepTotalText);
+
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyAcCommand);
+        await command.ExecuteAsync();
+
+        Assert.Equal(SleepDelayPreset.Never, idleService.LastSelection?.SleepDelay);
+        Assert.Equal(SleepDelayPreset.FiveMinutes, settingsStore.LastSaved?.SelectedAcSleepDelay);
+
+        viewModel.SelectedAcPresetIndex = 2;
+
+        Assert.True(viewModel.IsAcSleepDelayEnabled);
+        Assert.Equal(1, viewModel.SelectedAcSleepPresetIndex);
+        Assert.Equal("5分後", viewModel.SelectedAcSleepText);
+    }
+
+    [Fact]
+    public async Task IndividuallyConfiguredWindowsValuesDoNotChangeSavedSelections()
+    {
+        FakeIdleTimeoutService idleService = new(
+            new IdleTimeoutValues(
+                AcDisplaySeconds: 1800,
+                AcSleepSeconds: 900,
+                BatteryDisplaySeconds: 300,
+                BatterySleepSeconds: 1200));
+        FakeSettingsStore settingsStore = new(new UserSettings
+        {
+            SelectedAcTimeout = DisplayTimeoutPreset.TenMinutes,
+            SelectedAcSleepDelay = SleepDelayPreset.FifteenMinutes,
+        });
+        using MainWindowViewModel viewModel = new(
+            idleService,
+            new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            settingsStore);
+
+        await viewModel.InitializeAsync();
+
+        Assert.Equal("Windowsで個別に設定", viewModel.CurrentAcText);
+        Assert.True(viewModel.IsCurrentAcIndividuallyConfigured);
+        Assert.Equal(2, viewModel.SelectedAcPresetIndex);
+        Assert.Equal(2, viewModel.SelectedAcSleepPresetIndex);
+        Assert.False(viewModel.HasPendingAcChange);
+        Assert.Equal("前回選択", viewModel.AcSelectionCaption);
+    }
+
+    [Fact]
     public async Task ApplyFailureRemainsOnTheAffectedSection()
     {
-        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(600, 300))
+        FakeIdleTimeoutService displayService = new(600, 300)
         {
             SetException = new Win32Exception(5, "AC設定を変更できませんでした。"),
         };
@@ -176,12 +277,45 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task ApplyFailureUsesValuesObservedAfterRecovery()
+    {
+        IdleTimeoutValues recoveredValues = new(
+            AcDisplaySeconds: 300,
+            AcSleepSeconds: 600,
+            BatteryDisplaySeconds: 600,
+            BatterySleepSeconds: 1500);
+        FakeIdleTimeoutService idleService = new(600, 600)
+        {
+            SetException = new IdleTimeoutApplyException(
+                "変更に失敗し、復旧しました。",
+                recoveredValues,
+                restoreSucceeded: true,
+                new InvalidOperationException("write failed")),
+        };
+        using MainWindowViewModel viewModel = new(
+            idleService,
+            new FakeSleepPreventionService(),
+            new FakeDisplayOffService(),
+            new FakePowerSourceProvider(PowerSource.AcPower),
+            new FakeSettingsStore(new UserSettings()));
+        await viewModel.InitializeAsync();
+        viewModel.SelectedAcPresetIndex = 4;
+        AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyAcCommand);
+
+        await command.ExecuteAsync();
+
+        Assert.Equal("画面5分、PCは5分後（合計10分）", viewModel.CurrentAcText);
+        Assert.Equal("変更に失敗し、復旧しました。", viewModel.AcErrorMessage);
+        Assert.True(viewModel.HasPendingAcChange);
+    }
+
+    [Fact]
     public async Task CommandsRemainDisabledUntilInitializationCompletes()
     {
         TaskCompletionSource<UserSettings> loadCompletion = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeIdleTimeoutService(600, 600),
             new FakeSleepPreventionService(),
             new FakeDisplayOffService(),
             new FakePowerSourceProvider(PowerSource.AcPower),
@@ -204,7 +338,7 @@ public sealed class MainWindowViewModelTests
     {
         FakeDisplayOffService displayOffService = new();
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeIdleTimeoutService(600, 600),
             new FakeSleepPreventionService(),
             displayOffService,
             new FakePowerSourceProvider(PowerSource.AcPower),
@@ -233,7 +367,7 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(1, hideRequestCount);
         Assert.Equal(0, displayOffService.TurnOffCount);
 
-        viewModel.TurnOffDisplay();
+        await viewModel.TurnOffDisplayAsync();
 
         Assert.Equal(1, displayOffService.TurnOffCount);
     }
@@ -243,7 +377,7 @@ public sealed class MainWindowViewModelTests
     {
         FakeDisplayOffService displayOffService = new();
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeIdleTimeoutService(600, 600),
             new FakeSleepPreventionService(),
             displayOffService,
             new FakePowerSourceProvider(PowerSource.AcPower),
@@ -271,14 +405,14 @@ public sealed class MainWindowViewModelTests
             TurnOffException = new InvalidOperationException("消灯できませんでした。"),
         };
         using MainWindowViewModel viewModel = new(
-            new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+            new FakeIdleTimeoutService(600, 600),
             new FakeSleepPreventionService(),
             displayOffService,
             new FakePowerSourceProvider(PowerSource.AcPower),
             new FakeSettingsStore(new UserSettings()));
         await viewModel.InitializeAsync();
 
-        viewModel.TurnOffDisplay();
+        await viewModel.TurnOffDisplayAsync();
 
         Assert.True(viewModel.HasDisplayOffError);
         Assert.Equal("消灯できませんでした。", viewModel.DisplayOffErrorMessage);
@@ -288,7 +422,7 @@ public sealed class MainWindowViewModelTests
     [Fact]
     public async Task RefreshFailureAppearsAsGeneralError()
     {
-        FakeDisplayTimeoutService displayService = new(new DisplayTimeoutValues(600, 600))
+        FakeIdleTimeoutService displayService = new(600, 600)
         {
             ReadException = new InvalidOperationException("電源設定を読み込めませんでした。"),
         };
@@ -375,26 +509,41 @@ public sealed class MainWindowViewModelTests
     }
 
     private static MainWindowViewModel CreateViewModel(IApplicationUpdateService updateService) => new(
-        new FakeDisplayTimeoutService(new DisplayTimeoutValues(600, 600)),
+        new FakeIdleTimeoutService(600, 600),
         new FakeSleepPreventionService(),
         new FakeDisplayOffService(),
         new FakePowerSourceProvider(PowerSource.AcPower),
         new FakeSettingsStore(new UserSettings()),
         updateService);
 
-    private sealed class FakeDisplayTimeoutService(DisplayTimeoutValues values) : IDisplayTimeoutService
+    private sealed class FakeIdleTimeoutService : IIdleTimeoutService
     {
-        private DisplayTimeoutValues values = values;
+        private IdleTimeoutValues values;
+
+        public FakeIdleTimeoutService(uint acDisplaySeconds, uint batteryDisplaySeconds)
+            : this(
+                new IdleTimeoutValues(
+                    acDisplaySeconds,
+                    acDisplaySeconds + 15 * 60,
+                    batteryDisplaySeconds,
+                    batteryDisplaySeconds + 15 * 60))
+        {
+        }
+
+        public FakeIdleTimeoutService(IdleTimeoutValues values)
+        {
+            this.values = values;
+        }
 
         public PowerSettingTarget LastTarget { get; private set; }
 
-        public DisplayTimeoutPreset LastPreset { get; private set; }
+        public IdleTimeoutSelection? LastSelection { get; private set; }
 
         public Exception? SetException { get; init; }
 
         public Exception? ReadException { get; init; }
 
-        public Task<DisplayTimeoutValues> ReadAsync(CancellationToken cancellationToken = default)
+        public Task<IdleTimeoutValues> ReadAsync(CancellationToken cancellationToken = default)
         {
             if (ReadException is not null)
             {
@@ -404,9 +553,9 @@ public sealed class MainWindowViewModelTests
             return Task.FromResult(values);
         }
 
-        public Task<DisplayTimeoutValues> SetAsync(
+        public Task<IdleTimeoutValues> SetAsync(
             PowerSettingTarget target,
-            DisplayTimeoutPreset preset,
+            IdleTimeoutSelection selection,
             CancellationToken cancellationToken = default)
         {
             if (SetException is not null)
@@ -415,11 +564,20 @@ public sealed class MainWindowViewModelTests
             }
 
             LastTarget = target;
-            LastPreset = preset;
-            uint seconds = DisplayTimeoutCatalog.ToSeconds(preset);
+            LastSelection = selection;
+            uint displaySeconds = DisplayTimeoutCatalog.ToSeconds(selection.DisplayTimeout);
+            uint sleepSeconds = selection.ToSleepTimeoutSeconds();
             values = target == PowerSettingTarget.AcPower
-                ? values with { AcSeconds = seconds }
-                : values with { BatterySeconds = seconds };
+                ? values with
+                {
+                    AcDisplaySeconds = displaySeconds,
+                    AcSleepSeconds = sleepSeconds,
+                }
+                : values with
+                {
+                    BatteryDisplaySeconds = displaySeconds,
+                    BatterySleepSeconds = sleepSeconds,
+                };
             return Task.FromResult(values);
         }
     }
@@ -445,7 +603,7 @@ public sealed class MainWindowViewModelTests
 
         public Exception? TurnOffException { get; init; }
 
-        public void TurnOff()
+        public Task TurnOffAsync(CancellationToken cancellationToken = default)
         {
             if (TurnOffException is not null)
             {
@@ -453,6 +611,7 @@ public sealed class MainWindowViewModelTests
             }
 
             TurnOffCount++;
+            return Task.CompletedTask;
         }
     }
 
