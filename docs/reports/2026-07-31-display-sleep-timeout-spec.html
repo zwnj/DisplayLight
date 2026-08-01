@@ -786,7 +786,7 @@ blockquote {
   <h2 id="summary-title">結論</h2>
   <p>各電源側のカードで、最初に「画面をオフ」を選び、次に「PCをスリープ」を画面オフからの追加時間として選ぶ。DisplayLightは二つの選択をWindowsの絶対タイムアウトへ換算し、一回の「適用」で書き込む。<a class="source-ref" href="#source-1">[1]</a><a class="source-ref" href="#source-2">[2]</a></p>
   <div class="callout">
-    <strong>表示例：</strong>画面を10分でオフ、PCをその15分後にスリープ。操作がない状態で合計25分後にスリープする。
+    <strong>表示例：</strong>画面を10分でオフ、PCをその15分後にスリープ。「PCスリープ：合計25分後」と表示する。
   </div>
 </section>
 
@@ -809,7 +809,7 @@ blockquote {
 <section id="purpose" aria-labelledby="purpose-title">
   <h2 id="purpose-title">目的と範囲</h2>
   <p>現在のDisplayLightは、ディスプレイ消灯時間と一時的なスリープ防止を扱う。システムスリープ時間も同じ画面で扱い、スリープ防止を解除した後の動作を利用者が把握できるようにする。<a class="source-ref" href="#source-1">[1]</a></p>
-  <p>この仕様が対象とするのは、無操作時のディスプレイ消灯時間とシステムスリープ時間である。「今すぐディスプレイをオフ」は一回限りの補助操作であり、PCスリープまでの追加時間を開始するイベントにはしない。エージェント作業完了後の自動スリープも別機能として扱う。<a class="source-ref" href="#source-2">[2]</a></p>
+  <p>この仕様が対象とするのは、無操作時のディスプレイ消灯時間とシステムスリープ時間である。「今すぐ画面をオフ」は一回限りの補助操作であり、PCスリープまでの追加時間を開始するイベントにはしない。エージェント作業完了後の自動スリープも別機能として扱う。<a class="source-ref" href="#source-2">[2]</a></p>
 </section>
 
 <section id="user-model" aria-labelledby="user-model-title">
@@ -831,7 +831,7 @@ blockquote {
 
 <section id="presets" class="wide" aria-labelledby="presets-title">
   <h2 id="presets-title">プリセット</h2>
-  <p class="section-intro">二つのスライダーは各6択とし、時間へ比例しない離散選択肢として等間隔に配置する。</p>
+  <p class="section-intro">二つのプリセット選択行は各6択とし、時間へ比例しない離散選択肢として等幅に配置する。各候補は一回のクリックで直接選べる。<a class="source-ref" href="#source-6">[6]</a></p>
   <div class="table-wrap">
     <table class="scroll-table">
       <caption>画面オフ時間とPCスリープ追加時間の選択肢</caption>
@@ -918,19 +918,19 @@ A がスリープしない   → S = 0（スリープしない）
   <h2 id="ui-behavior-title">UIの振る舞い</h2>
   <article class="finding">
     <h3>AC時とバッテリー時を別々に編集する</h3>
-    <p>各カードに「画面をオフ」と「PCをスリープ」をこの順で置く。現在使っている電源側だけを初期展開し、カードごとに一つの「適用」を置く。</p>
+    <p>各カードに「画面オフ」と「PCスリープ」のプリセット行をこの順で置く。起動時は両方のカードを閉じ、カードごとに一つの「変更を適用」を置く。</p>
   </article>
   <article class="finding">
     <h3>合計時間を常に併記する</h3>
-    <p>「15分後」だけではWindowsへ保存される値が分からないため、「操作がない状態で合計25分後」のように表示する。</p>
+    <p>「15分後」だけではWindowsへ保存される値が分からないため、「PCスリープ：合計25分後」のように表示する。</p>
   </article>
   <article class="finding">
     <h3>画面が無期限なら追加時間を固定する</h3>
-    <p>「画面をオフ」が無期限の場合、「PCをスリープ」は「スリープしない」に固定してスライダーを無効にする。最後に選んだ追加時間は保持し、画面オフを有限へ戻したときに復元する。</p>
+    <p>「画面オフ」が無期限の場合、「PCスリープ」は「スリープしない」に固定して選択行を無効にする。最後に選んだ追加時間は保持し、画面オフを有限へ戻したときに復元する。</p>
   </article>
   <article class="finding">
     <h3>スリープ防止との違いを明示する</h3>
-    <p>スリープ防止中も電源設定は変更できる。補足文は「スリープ防止中も画面は設定時間後に消えます」とし、PCスリープだけを一時的に抑止していることを示す。<a class="source-ref" href="#source-1">[1]</a></p>
+    <p>スリープ防止中も電源設定は変更できる。補足文は「自動スリープだけを防止。画面は設定どおり消えます」とし、PCスリープだけを一時的に抑止していることを示す。<a class="source-ref" href="#source-1">[1]</a></p>
   </article>
 </section>
 
@@ -1018,6 +1018,7 @@ A がスリープしない   → S = 0（スリープしない）
     <li id="source-3"><a href="../OPEN_QUESTIONS.md">OPEN_QUESTIONS.md Q20</a>：プリセット外と個別設定の扱い。</li>
     <li id="source-4"><a href="https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/sleep-settings-sleep-idle-timeout">Microsoft Learn「Sleep idle timeout」</a>：<code>STANDBYIDLE</code>は無操作時間を秒単位で保持し、0は自動スリープなしを表す。</li>
     <li id="source-5"><a href="../../src/DisplayLight.App/Infrastructure/Windows/WindowsIdleTimeoutService.cs">WindowsIdleTimeoutService.cs</a>、<a href="../../src/DisplayLight.Core/Power/IdleTimeoutPolicy.cs">IdleTimeoutPolicy.cs</a>：2026年7月31日時点の実装境界。</li>
+    <li id="source-6"><a href="../adr/0010-compact-preset-selection.md">ADR 0010</a>：二行のセグメント選択を採用した理由と表示規則。</li>
   </ol>
 </section>
 

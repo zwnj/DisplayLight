@@ -90,7 +90,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task InitializesExpandedSectionFromCurrentPowerSource()
+    public async Task InitializesWithBothPowerSectionsCollapsed()
     {
         using MainWindowViewModel viewModel = new(
             new FakeIdleTimeoutService(600, 300),
@@ -102,13 +102,13 @@ public sealed class MainWindowViewModelTests
         await viewModel.InitializeAsync();
 
         Assert.False(viewModel.IsAcExpanded);
-        Assert.True(viewModel.IsBatteryExpanded);
+        Assert.False(viewModel.IsBatteryExpanded);
         Assert.Equal("電源：バッテリー駆動", viewModel.PowerSourceText);
         Assert.Equal(
             "AC電源時、現在画面10分、PCは15分後（合計25分）、展開",
             viewModel.AcExpansionAutomationName);
         Assert.Equal(
-            "バッテリー時、現在画面5分、PCは15分後（合計20分）、折りたたむ",
+            "バッテリー時、現在画面5分、PCは15分後（合計20分）、展開",
             viewModel.BatteryExpansionAutomationName);
     }
 
@@ -122,6 +122,14 @@ public sealed class MainWindowViewModelTests
             new FakePowerSourceProvider(PowerSource.AcPower),
             new FakeSettingsStore(new UserSettings()));
         await viewModel.InitializeAsync();
+
+        viewModel.Expand(PowerSettingTarget.AcPower);
+
+        Assert.True(viewModel.IsAcExpanded);
+        Assert.False(viewModel.IsBatteryExpanded);
+        Assert.Equal(
+            "AC電源時、現在画面10分、PCは15分後（合計25分）、折りたたむ",
+            viewModel.AcExpansionAutomationName);
 
         viewModel.Expand(PowerSettingTarget.AcPower);
 
@@ -174,7 +182,7 @@ public sealed class MainWindowViewModelTests
 
         Assert.True(viewModel.HasPendingAcChange);
         Assert.Equal("60分後", viewModel.SelectedAcSleepText);
-        Assert.Equal("操作がない状態で合計70分後", viewModel.SelectedAcSleepTotalText);
+        Assert.Equal("PCスリープ：合計70分後", viewModel.SelectedAcSleepTotalText);
 
         AsyncRelayCommand command = Assert.IsType<AsyncRelayCommand>(viewModel.ApplyAcCommand);
         await command.ExecuteAsync();
@@ -392,7 +400,7 @@ public sealed class MainWindowViewModelTests
         viewModel.AdvanceDisplayOffCountdown();
 
         Assert.False(viewModel.IsDisplayOffCountdownActive);
-        Assert.Equal("ディスプレイをオフ", viewModel.DisplayOffButtonText);
+        Assert.Equal("今すぐ画面をオフ", viewModel.DisplayOffButtonText);
         Assert.Equal(0, hideRequestCount);
         Assert.Equal(0, displayOffService.TurnOffCount);
     }

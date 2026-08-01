@@ -53,8 +53,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
     private int? currentBatterySleepPresetIndex;
     private IdleTimeoutInterpretation? currentAcInterpretation;
     private IdleTimeoutInterpretation? currentBatteryInterpretation;
-    private PowerSettingTarget? expandedTarget = PowerSettingTarget.AcPower;
-    private bool hasInitializedExpansion;
+    private PowerSettingTarget? expandedTarget;
     private bool isUpdatingSelection;
     private bool hasAcSelectionChanged;
     private bool hasBatterySelectionChanged;
@@ -530,11 +529,11 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     public string DisplayOffButtonText => IsDisplayOffCountdownActive
         ? $"{DisplayOffRemainingSeconds}秒後にオフ　キャンセル"
-        : "ディスプレイをオフ";
+        : "今すぐ画面をオフ";
 
     public string DisplayOffAutomationName => IsDisplayOffCountdownActive
         ? $"ディスプレイを{DisplayOffRemainingSeconds}秒後にオフ。押すとキャンセルします"
-        : "ディスプレイをオフ。3秒のカウントダウンを開始します";
+        : "今すぐ画面をオフ。3秒のカウントダウンを開始します";
 
     public bool IsBusy
     {
@@ -930,14 +929,6 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
                 _ => "電源：不明",
             };
 
-            if (!hasInitializedExpansion && source is PowerSource.AcPower or PowerSource.Battery)
-            {
-                SetExpandedTarget(source == PowerSource.Battery
-                    ? PowerSettingTarget.Battery
-                    : PowerSettingTarget.AcPower);
-                hasInitializedExpansion = true;
-            }
-
             if (changed)
             {
                 ApplySleepPreventionDecision();
@@ -1113,7 +1104,7 @@ internal sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         IdleTimeoutSelection selection = new(displayPreset, sleepDelay);
-        return $"操作がない状態で合計{PresetPresentation.FormatSeconds(selection.ToSleepTimeoutSeconds())}後";
+        return $"PCスリープ：合計{PresetPresentation.FormatSeconds(selection.ToSleepTimeoutSeconds())}後";
     }
 
     private void UpdateSelectionWithoutMarkingPending(Action update)

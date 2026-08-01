@@ -93,6 +93,7 @@
             <Setter Property="Padding" Value="10,6" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -100,7 +101,7 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome"
                                 Background="{TemplateBinding Background}"
-                                BorderBrush="Transparent"
+                                BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="2"
                                 CornerRadius="9"
                                 Padding="{TemplateBinding Padding}">
@@ -245,6 +246,12 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="SectionHeadingStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
         <Style x:Key="PresetItemStyle" TargetType="ListBoxItem">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -343,6 +350,83 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="CompactPresetItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Content, RelativeSource={RelativeSource Self}}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Margin="1">
+                            <Border x:Name="Chrome"
+                                    CornerRadius="7"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="2"
+                                    Background="Transparent">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  TextElement.FontSize="10" />
+                            </Border>
+                            <Border Height="2"
+                                    Margin="8,0"
+                                    VerticalAlignment="Bottom"
+                                    CornerRadius="1"
+                                    Background="{DynamicResource TextPrimaryBrush}">
+                                <Border.Visibility>
+                                    <MultiBinding Converter="{StaticResource CurrentPresetMarkerVisibilityConverter}">
+                                        <Binding RelativeSource="{RelativeSource TemplatedParent}" Path="(ItemsControl.AlternationIndex)" />
+                                        <Binding RelativeSource="{RelativeSource AncestorType={x:Type controls:DiscretePresetListBox}}" Path="CurrentIndex" />
+                                        <Binding RelativeSource="{RelativeSource AncestorType={x:Type controls:DiscretePresetListBox}}" Path="HasPendingChange" />
+                                    </MultiBinding>
+                                </Border.Visibility>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CompactPresetListStyle" TargetType="controls:DiscretePresetListBox">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="AlternationCount" Value="6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" Columns="6" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="controls:DiscretePresetListBox">
+                        <ItemsPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
 
     <Border x:Name="FlyoutSurface"
@@ -382,7 +466,7 @@
                             Content="⋯"
                             FontSize="18"
                             Style="{StaticResource QuietButtonStyle}"
-                            AutomationProperties.Name="その他の操作"
+                            AutomationProperties.Name="メニューを開く"
                             Click="MoreButton_Click">
                         <Button.ContextMenu>
                             <ContextMenu Opened="AuxiliaryMenu_Opened" Closed="AuxiliaryMenu_Closed">
@@ -435,7 +519,7 @@
                 </Border>
 
                 <Border Margin="0,8,0,0"
-                        Padding="16,14"
+                        Padding="16,12"
                         CornerRadius="12"
                         Background="{DynamicResource SurfaceElevatedBrush}">
                     <StackPanel>
@@ -459,9 +543,9 @@
                                                Margin="0,2,0,0"
                                                FontSize="20"
                                                FontWeight="SemiBold" />
-                                    <TextBlock Text="PCの自動スリープだけを防止。画面は設定時間後に消えます"
+                                    <TextBlock Text="自動スリープだけを防止。画面は設定どおり消えます"
                                                Margin="0,3,0,0"
-                                               FontSize="11"
+                                               FontSize="12"
                                                TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextSecondaryBrush}" />
                                 </StackPanel>
@@ -476,7 +560,7 @@
                                   Content="AC電源接続時のみ"
                                   IsChecked="{Binding IsAcPowerOnly, Mode=TwoWay}"
                                   Command="{Binding UpdateAcPowerOnlyCommand}"
-                                  Margin="0,6,0,0"
+                                  Margin="0,2,0,0"
                                   VerticalContentAlignment="Center" />
                         <TextBlock Text="{Binding SleepErrorMessage}"
                                    Visibility="{Binding HasSleepError, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -487,13 +571,23 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="画面とPCの省電力設定"
-                           Margin="2,20,2,8"
-                           FontSize="14"
-                           FontWeight="SemiBold"
-                           AutomationProperties.HeadingLevel="Level2" />
+                <Grid Margin="2,20,2,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border CornerRadius="2" Background="{DynamicResource BorderBrush}" />
+                    <TextBlock Grid.Column="1"
+                               Text="画面オフとスリープ"
+                               Margin="10,0,0,0"
+                               Style="{StaticResource SectionHeadingStyle}"
+                               AutomationProperties.HeadingLevel="Level2" />
+                </Grid>
 
-                <Border CornerRadius="12" Background="{DynamicResource SurfaceElevatedBrush}">
+                <Border CornerRadius="12"
+                        Background="{DynamicResource SurfaceElevatedBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1">
                     <StackPanel>
                         <ToggleButton IsChecked="{Binding IsAcExpanded, Mode=OneWay}"
                                       Style="{StaticResource QuietToggleStyle}"
@@ -505,7 +599,10 @@
                                     <ColumnDefinition Width="24" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="AC電源時" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="AC電源時"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               AutomationProperties.HeadingLevel="Level3" />
                                     <TextBlock Text="{Binding CurrentAcDisplayText, StringFormat=現在 {0}}"
                                                Margin="0,3,0,0"
                                                FontSize="11"
@@ -519,31 +616,82 @@
                                 <Path Grid.Column="1" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource ChevronPathStyle}" />
                             </Grid>
                         </ToggleButton>
-                        <StackPanel Visibility="{Binding IsAcExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                    Margin="12,0,12,12">
-                            <TextBlock Text="画面をオフ"
-                                       Margin="4,8,4,0"
-                                       FontSize="12"
-                                       FontWeight="SemiBold" />
-                            <Grid x:Name="AcActionRow"
-                                  Height="44"
-                                  Margin="4,0,4,2">
+                        <Border Visibility="{Binding IsAcExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,1,0,0"
+                                CornerRadius="0,0,12,12">
+                        <StackPanel Margin="12,4,12,12">
+                            <Grid x:Name="AcActionRow" Height="44" Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="画面オフ"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <controls:DiscretePresetListBox x:Name="AcPresetList"
+                                                            Grid.Column="1"
+                                                            SelectedIndex="{Binding SelectedAcPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentAcPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingAcChange}"
+                                                            Style="{StaticResource CompactPresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource CompactPresetItemStyle}"
+                                                            AutomationProperties.Name="AC電源時の画面オフ時間">
+                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
+                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
+                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
+                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
+                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
+                                <ListBoxItem Content="なし" AutomationProperties.Name="無期限" />
+                                </controls:DiscretePresetListBox>
+                            </Grid>
+                            <Grid Height="44" Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="PCスリープ"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <controls:DiscretePresetListBox x:Name="AcSleepPresetList"
+                                                            Grid.Column="1"
+                                                            SelectedIndex="{Binding SelectedAcSleepPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentAcSleepPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingAcChange}"
+                                                            IsEnabled="{Binding IsAcSleepDelayEnabled}"
+                                                            Style="{StaticResource CompactPresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource CompactPresetItemStyle}"
+                                                            AutomationProperties.Name="AC電源時、画面オフからPCスリープまでの時間">
+                                <ListBoxItem Content="同時" AutomationProperties.Name="画面オフと同時" />
+                                <ListBoxItem Content="+5分" AutomationProperties.Name="画面オフの5分後" />
+                                <ListBoxItem Content="+15分" AutomationProperties.Name="画面オフの15分後" />
+                                <ListBoxItem Content="+30分" AutomationProperties.Name="画面オフの30分後" />
+                                <ListBoxItem Content="+60分" AutomationProperties.Name="画面オフの60分後" />
+                                <ListBoxItem Content="なし" AutomationProperties.Name="PCをスリープしない" />
+                                </controls:DiscretePresetListBox>
+                            </Grid>
+                            <Grid MinHeight="44" Margin="4,4,4,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding AcSelectionCaption}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedAcText}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding AcSelectionCaption}"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding SelectedAcSleepTotalText}"
+                                               Margin="0,1,8,0"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </StackPanel>
                                 <Button x:Name="AcApplyButton"
-                                        Grid.Column="2"
-                                        Content="適用"
+                                        Grid.Column="1"
+                                        Content="変更を適用"
                                         Command="{Binding ApplyAcCommand}"
-                                        Margin="10,0,0,0"
                                         AutomationProperties.Name="AC電源時の画面オフとPCスリープ時間を適用">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource ApplyButtonStyle}">
@@ -557,53 +705,6 @@
                                     </Button.Style>
                                 </Button>
                             </Grid>
-                            <controls:DiscretePresetListBox x:Name="AcPresetList"
-                                                            SelectedIndex="{Binding SelectedAcPresetIndex, Mode=TwoWay}"
-                                                            CurrentIndex="{Binding CurrentAcPresetIndex}"
-                                                            HasPendingChange="{Binding HasPendingAcChange}"
-                                                            Style="{StaticResource PresetListStyle}"
-                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
-                                                            AutomationProperties.Name="AC電源時の画面オフ時間">
-                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
-                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
-                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
-                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
-                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
-                                <ListBoxItem Content="無期限" AutomationProperties.Name="無期限" />
-                            </controls:DiscretePresetListBox>
-                            <Grid Margin="4,16,4,2">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="PCをスリープ"
-                                           FontSize="12"
-                                           FontWeight="SemiBold" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedAcSleepText}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}" />
-                            </Grid>
-                            <TextBlock Text="{Binding SelectedAcSleepTotalText}"
-                                       Margin="4,0,4,6"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource TextSecondaryBrush}" />
-                            <controls:DiscretePresetListBox x:Name="AcSleepPresetList"
-                                                            SelectedIndex="{Binding SelectedAcSleepPresetIndex, Mode=TwoWay}"
-                                                            CurrentIndex="{Binding CurrentAcSleepPresetIndex}"
-                                                            HasPendingChange="{Binding HasPendingAcChange}"
-                                                            IsEnabled="{Binding IsAcSleepDelayEnabled}"
-                                                            Style="{StaticResource PresetListStyle}"
-                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
-                                                            AutomationProperties.Name="AC電源時、画面オフからPCスリープまでの時間">
-                                <ListBoxItem Content="同時" AutomationProperties.Name="画面オフと同時" />
-                                <ListBoxItem Content="5分" AutomationProperties.Name="画面オフの5分後" />
-                                <ListBoxItem Content="15分" AutomationProperties.Name="画面オフの15分後" />
-                                <ListBoxItem Content="30分" AutomationProperties.Name="画面オフの30分後" />
-                                <ListBoxItem Content="60分" AutomationProperties.Name="画面オフの60分後" />
-                                <ListBoxItem Content="なし" AutomationProperties.Name="PCをスリープしない" />
-                            </controls:DiscretePresetListBox>
                             <TextBlock Text="{Binding AcErrorMessage}"
                                        Visibility="{Binding HasAcError, Converter={StaticResource BooleanToVisibilityConverter}}"
                                        Margin="4,6,4,0"
@@ -611,10 +712,15 @@
                                        TextWrapping="Wrap"
                                        AutomationProperties.LiveSetting="Assertive" />
                         </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 
-                <Border Margin="0,8,0,0" CornerRadius="12" Background="{DynamicResource SurfaceElevatedBrush}">
+                <Border Margin="0,8,0,0"
+                        CornerRadius="12"
+                        Background="{DynamicResource SurfaceElevatedBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1">
                     <StackPanel>
                         <ToggleButton IsChecked="{Binding IsBatteryExpanded, Mode=OneWay}"
                                       Style="{StaticResource QuietToggleStyle}"
@@ -626,7 +732,10 @@
                                     <ColumnDefinition Width="24" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="バッテリー時" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="バッテリー時"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               AutomationProperties.HeadingLevel="Level3" />
                                     <TextBlock Text="{Binding CurrentBatteryDisplayText, StringFormat=現在 {0}}"
                                                Margin="0,3,0,0"
                                                FontSize="11"
@@ -640,27 +749,82 @@
                                 <Path Grid.Column="1" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource ChevronPathStyle}" />
                             </Grid>
                         </ToggleButton>
-                        <StackPanel Visibility="{Binding IsBatteryExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                    Margin="12,0,12,12">
-                            <TextBlock Text="画面をオフ"
-                                       Margin="4,8,4,0"
-                                       FontSize="12"
-                                       FontWeight="SemiBold" />
-                            <Grid x:Name="BatteryActionRow"
-                                  Height="44"
-                                  Margin="4,0,4,2">
+                        <Border Visibility="{Binding IsBatteryExpanded, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="0,1,0,0"
+                                CornerRadius="0,0,12,12">
+                        <StackPanel Margin="12,4,12,12">
+                            <Grid x:Name="BatteryActionRow" Height="44" Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="画面オフ"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <controls:DiscretePresetListBox x:Name="BatteryPresetList"
+                                                            Grid.Column="1"
+                                                            SelectedIndex="{Binding SelectedBatteryPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentBatteryPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingBatteryChange}"
+                                                            Style="{StaticResource CompactPresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource CompactPresetItemStyle}"
+                                                            AutomationProperties.Name="バッテリー時の画面オフ時間">
+                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
+                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
+                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
+                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
+                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
+                                <ListBoxItem Content="なし" AutomationProperties.Name="無期限" />
+                                </controls:DiscretePresetListBox>
+                            </Grid>
+                            <Grid Height="44" Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="PCスリープ"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <controls:DiscretePresetListBox x:Name="BatterySleepPresetList"
+                                                            Grid.Column="1"
+                                                            SelectedIndex="{Binding SelectedBatterySleepPresetIndex, Mode=TwoWay}"
+                                                            CurrentIndex="{Binding CurrentBatterySleepPresetIndex}"
+                                                            HasPendingChange="{Binding HasPendingBatteryChange}"
+                                                            IsEnabled="{Binding IsBatterySleepDelayEnabled}"
+                                                            Style="{StaticResource CompactPresetListStyle}"
+                                                            ItemContainerStyle="{StaticResource CompactPresetItemStyle}"
+                                                            AutomationProperties.Name="バッテリー時、画面オフからPCスリープまでの時間">
+                                <ListBoxItem Content="同時" AutomationProperties.Name="画面オフと同時" />
+                                <ListBoxItem Content="+5分" AutomationProperties.Name="画面オフの5分後" />
+                                <ListBoxItem Content="+15分" AutomationProperties.Name="画面オフの15分後" />
+                                <ListBoxItem Content="+30分" AutomationProperties.Name="画面オフの30分後" />
+                                <ListBoxItem Content="+60分" AutomationProperties.Name="画面オフの60分後" />
+                                <ListBoxItem Content="なし" AutomationProperties.Name="PCをスリープしない" />
+                                </controls:DiscretePresetListBox>
+                            </Grid>
+                            <Grid MinHeight="44" Margin="4,4,4,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding BatterySelectionCaption}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding SelectedBatteryText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding BatterySelectionCaption}"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                    <TextBlock Text="{Binding SelectedBatterySleepTotalText}"
+                                               Margin="0,1,8,0"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </StackPanel>
                                 <Button x:Name="BatteryApplyButton"
-                                        Grid.Column="2"
-                                        Content="適用"
+                                        Grid.Column="1"
+                                        Content="変更を適用"
                                         Command="{Binding ApplyBatteryCommand}"
-                                        Margin="10,0,0,0"
                                         AutomationProperties.Name="バッテリー時の画面オフとPCスリープ時間を適用">
                                     <Button.Style>
                                         <Style TargetType="Button" BasedOn="{StaticResource ApplyButtonStyle}">
@@ -674,53 +838,6 @@
                                     </Button.Style>
                                 </Button>
                             </Grid>
-                            <controls:DiscretePresetListBox x:Name="BatteryPresetList"
-                                                            SelectedIndex="{Binding SelectedBatteryPresetIndex, Mode=TwoWay}"
-                                                            CurrentIndex="{Binding CurrentBatteryPresetIndex}"
-                                                            HasPendingChange="{Binding HasPendingBatteryChange}"
-                                                            Style="{StaticResource PresetListStyle}"
-                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
-                                                            AutomationProperties.Name="バッテリー時の画面オフ時間">
-                                <ListBoxItem Content="1分" AutomationProperties.Name="1分" />
-                                <ListBoxItem Content="5分" AutomationProperties.Name="5分" />
-                                <ListBoxItem Content="10分" AutomationProperties.Name="10分" />
-                                <ListBoxItem Content="30分" AutomationProperties.Name="30分" />
-                                <ListBoxItem Content="60分" AutomationProperties.Name="60分" />
-                                <ListBoxItem Content="無期限" AutomationProperties.Name="無期限" />
-                            </controls:DiscretePresetListBox>
-                            <Grid Margin="4,16,4,2">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="PCをスリープ"
-                                           FontSize="12"
-                                           FontWeight="SemiBold" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedBatterySleepText}"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}" />
-                            </Grid>
-                            <TextBlock Text="{Binding SelectedBatterySleepTotalText}"
-                                       Margin="4,0,4,6"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource TextSecondaryBrush}" />
-                            <controls:DiscretePresetListBox x:Name="BatterySleepPresetList"
-                                                            SelectedIndex="{Binding SelectedBatterySleepPresetIndex, Mode=TwoWay}"
-                                                            CurrentIndex="{Binding CurrentBatterySleepPresetIndex}"
-                                                            HasPendingChange="{Binding HasPendingBatteryChange}"
-                                                            IsEnabled="{Binding IsBatterySleepDelayEnabled}"
-                                                            Style="{StaticResource PresetListStyle}"
-                                                            ItemContainerStyle="{StaticResource PresetItemStyle}"
-                                                            AutomationProperties.Name="バッテリー時、画面オフからPCスリープまでの時間">
-                                <ListBoxItem Content="同時" AutomationProperties.Name="画面オフと同時" />
-                                <ListBoxItem Content="5分" AutomationProperties.Name="画面オフの5分後" />
-                                <ListBoxItem Content="15分" AutomationProperties.Name="画面オフの15分後" />
-                                <ListBoxItem Content="30分" AutomationProperties.Name="画面オフの30分後" />
-                                <ListBoxItem Content="60分" AutomationProperties.Name="画面オフの60分後" />
-                                <ListBoxItem Content="なし" AutomationProperties.Name="PCをスリープしない" />
-                            </controls:DiscretePresetListBox>
                             <TextBlock Text="{Binding BatteryErrorMessage}"
                                        Visibility="{Binding HasBatteryError, Converter={StaticResource BooleanToVisibilityConverter}}"
                                        Margin="4,6,4,0"
@@ -728,6 +845,7 @@
                                        TextWrapping="Wrap"
                                        AutomationProperties.LiveSetting="Assertive" />
                         </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 
@@ -742,7 +860,9 @@
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource QuietButtonStyle}">
                             <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsDisplayOffCountdownActive}" Value="True">
                                     <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
